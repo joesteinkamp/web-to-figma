@@ -1,0 +1,14 @@
+{
+  "name": "web-to-figma",
+  "version": "1.0.0",
+  "description": "CLI tool that uses Playwright to capture websites for Figma via a local HTTP API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "playwright": "^1.49.0"
+  }
+}
