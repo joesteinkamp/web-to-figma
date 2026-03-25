@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>Web to Figma</h1>
+
+  <label for="captureId">Capture ID</label>
+  <input type="text" id="captureId" placeholder="Enter capture ID">
+
+  <label for="endpoint">Endpoint</label>
+  <input type="text" id="endpoint" placeholder="Enter submission endpoint">
+
+  <button id="captureBtn">Capture to Figma</button>
+
+  <div id="status"></div>
+
+  <p class="hint">
+    Get the Capture ID and Endpoint from Figma's MCP server
+    using the <code>generate_figma_design</code> tool in Claude Code.
+  </p>
+
+  <script src="popup.js"></script>
+</body>
+</html>
