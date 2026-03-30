@@ -1,11 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
   const setupView = document.getElementById("setupView");
   const captureView = document.getElementById("captureView");
-  const tokenInput = document.getElementById("tokenInput");
-  const saveTokenBtn = document.getElementById("saveTokenBtn");
   const captureBtn = document.getElementById("captureBtn");
+  const retryBtn = document.getElementById("retryBtn");
   const status = document.getElementById("status");
-  const logoutLink = document.getElementById("logoutLink");
 
   function showSetup() {
     setupView.style.display = "block";
@@ -17,33 +15,22 @@ document.addEventListener("DOMContentLoaded", () => {
     captureView.style.display = "block";
   }
 
-  // Check if token exists
-  chrome.runtime.sendMessage({ action: "checkAuth" }, (resp) => {
-    if (resp?.authenticated) {
-      showCapture();
-    } else {
-      showSetup();
-    }
-  });
-
-  // Save token
-  saveTokenBtn.addEventListener("click", () => {
-    const token = tokenInput.value.trim();
-    if (!token) return;
-
-    chrome.runtime.sendMessage({ action: "saveToken", token }, () => {
-      showCapture();
+  function checkServer() {
+    chrome.runtime.sendMessage({ action: "checkServer" }, (resp) => {
+      if (resp?.running) {
+        showCapture();
+      } else {
+        showSetup();
+      }
     });
-  });
+  }
 
-  // Also save on Enter
-  tokenInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") saveTokenBtn.click();
-  });
+  checkServer();
 
-  // Capture
+  retryBtn.addEventListener("click", checkServer);
+
   captureBtn.addEventListener("click", async () => {
-    status.textContent = "Capturing...";
+    status.textContent = "Capturing... (may take ~10s)";
     status.className = "";
     captureBtn.disabled = true;
 
@@ -54,10 +41,6 @@ document.addEventListener("DOMContentLoaded", () => {
         status.textContent = "Sent to Figma!";
         status.className = "success";
       } else {
-        if (response.error === "NO_TOKEN") {
-          showSetup();
-          return;
-        }
         status.textContent = response.error;
         status.className = "error";
       }
@@ -67,14 +50,5 @@ document.addEventListener("DOMContentLoaded", () => {
     } finally {
       captureBtn.disabled = false;
     }
-  });
-
-  // Logout
-  logoutLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    chrome.runtime.sendMessage({ action: "logout" }, () => {
-      showSetup();
-      status.textContent = "";
-    });
   });
 });
