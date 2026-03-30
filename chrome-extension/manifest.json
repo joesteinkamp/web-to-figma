@@ -9,7 +9,8 @@
     "storage"
   ],
   "host_permissions": [
-    "https://mcp.figma.com/*"
+    "https://mcp.figma.com/*",
+    "http://localhost:3131/*"
   ],
   "action": {
     "default_popup": "popup.html",
