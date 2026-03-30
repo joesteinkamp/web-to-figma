@@ -1,27 +1,36 @@
 # Web to Figma — Chrome Extension
 
-One-click capture of any webpage to Figma. No server, no copy-pasting IDs — just click and go.
+One-click capture of any webpage to Figma.
+
+## Prerequisites
+
+- **Claude Code** with the Figma MCP server configured:
+  ```
+  claude mcp add --transport http figma https://mcp.figma.com/mcp
+  ```
 
 ## Setup
 
 1. Open `chrome://extensions/` in Chrome
-2. Enable **Developer mode** (toggle in top-right)
+2. Enable **Developer mode**
 3. Click **Load unpacked** and select this `chrome-extension/` directory
-4. The extension icon appears in your toolbar
 
 ## Usage
 
-1. Navigate to the webpage you want to capture
-2. Click the **Web to Figma** extension icon
-3. Click **Capture to Figma**
-4. First time only: sign in to Figma when prompted
+1. Start the capture server (from the project root):
+   ```bash
+   npm run capture
+   ```
+2. Navigate to the webpage you want to capture
+3. Click the **Web to Figma** extension icon
+4. Click **Capture to Figma**
 
-The extension connects directly to Figma's remote MCP server (`mcp.figma.com`) to handle capture setup automatically.
+The extension calls the local server, which uses Claude Code's CLI to invoke `generate_figma_design` on Figma's MCP server. This takes ~10 seconds.
 
 ## How It Works
 
-1. The extension authenticates with Figma via OAuth (one-time sign-in)
-2. On capture, it calls `generate_figma_design` on Figma's remote MCP server to get a capture session
-3. It fetches and injects Figma's capture script into the current page (bypasses CSP via `world: "MAIN"`)
-4. It calls `window.figma.captureForDesign()` with the session credentials
-5. The captured design appears in your Figma drafts
+1. Extension sends the page title to `localhost:3131/generate-capture`
+2. The server runs `claude -p` to call `generate_figma_design` via Figma's MCP
+3. Server returns `captureId` + `endpoint` to the extension
+4. Extension fetches and injects Figma's capture script into the page
+5. Extension calls `captureForDesign()` — the design appears in your Figma drafts
