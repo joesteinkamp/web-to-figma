@@ -6,8 +6,22 @@
 </head>
 <body>
   <h1>Web to Figma</h1>
-  <button id="captureBtn">Capture to Figma</button>
-  <div id="status"></div>
+
+  <div id="captureView">
+    <button id="captureBtn">Capture to Figma</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="setupView" style="display:none">
+    <p class="setup-text">One-time setup: run this in your terminal:</p>
+    <div class="command-row">
+      <code id="setupCommand" class="command"></code>
+      <button id="copyBtn" class="copy-btn" title="Copy">Copy</button>
+    </div>
+    <p class="setup-hint">Then click Retry below.</p>
+    <button id="retryBtn">Retry</button>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
