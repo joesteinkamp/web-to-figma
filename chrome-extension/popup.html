@@ -7,25 +7,15 @@
 <body>
   <h1>Web to Figma</h1>
 
-  <div id="connection" class="connection disconnected">
-    <span class="dot"></span>
-    <span id="connectionText">Checking server...</span>
-  </div>
+  <div id="authStatus" class="auth-status"></div>
 
-  <button id="captureBtn" disabled>Capture to Figma</button>
+  <button id="captureBtn">Capture to Figma</button>
 
   <div id="status"></div>
 
-  <details class="settings">
-    <summary>Settings</summary>
-    <label for="serverUrl">Server URL</label>
-    <input type="text" id="serverUrl" placeholder="http://localhost:3131">
-  </details>
-
-  <p class="hint">
-    Run <code>npm start</code> to start the server, then ask Claude Code
-    to prepare a Figma capture using <code>generate_figma_design</code>.
-  </p>
+  <div class="footer">
+    <a href="#" id="logoutLink">Sign out</a>
+  </div>
 
   <script src="popup.js"></script>
 </body>

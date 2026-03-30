@@ -1,6 +1,6 @@
 # Web to Figma — Chrome Extension
 
-A Chrome Extension that captures the current webpage and sends it to a Figma file using Figma's capture script.
+One-click capture of any webpage to Figma. No server, no copy-pasting IDs — just click and go.
 
 ## Setup
 
@@ -13,16 +13,15 @@ A Chrome Extension that captures the current webpage and sends it to a Figma fil
 
 1. Navigate to the webpage you want to capture
 2. Click the **Web to Figma** extension icon
-3. Enter the **Capture ID** and **Endpoint** from Figma's MCP server
-4. Click **Capture to Figma**
+3. Click **Capture to Figma**
+4. First time only: sign in to Figma when prompted
 
-### Getting Capture ID and Endpoint
-
-Use Claude Code with the [Figma MCP server](https://github.com/figma/figma-mcp) configured. Ask Claude to call the `generate_figma_design` tool, which returns the `captureId` and submission `endpoint` needed for the extension.
+The extension connects directly to Figma's remote MCP server (`mcp.figma.com`) to handle capture setup automatically.
 
 ## How It Works
 
-1. The extension fetches Figma's capture script from `https://mcp.figma.com/mcp/html-to-design/capture.js`
-2. It injects the script into the current page using `chrome.scripting.executeScript` (bypasses CSP)
-3. It calls `window.figma.captureForDesign()` with the provided captureId and endpoint
-4. The captured design is submitted to Figma and appears in your Figma file
+1. The extension authenticates with Figma via OAuth (one-time sign-in)
+2. On capture, it calls `generate_figma_design` on Figma's remote MCP server to get a capture session
+3. It fetches and injects Figma's capture script into the current page (bypasses CSP via `world: "MAIN"`)
+4. It calls `window.figma.captureForDesign()` with the session credentials
+5. The captured design appears in your Figma drafts

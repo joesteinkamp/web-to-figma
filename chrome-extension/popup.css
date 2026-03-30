@@ -1,5 +1,5 @@
 body {
-  width: 320px;
+  width: 280px;
   padding: 16px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
@@ -12,81 +12,23 @@ h1 {
   margin: 0 0 12px;
 }
 
-.connection {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
+.auth-status {
   font-size: 12px;
-  font-weight: 500;
+  color: #888;
   margin-bottom: 12px;
 }
 
-.connection .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.connection.disconnected {
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.connection.disconnected .dot {
-  background: #dc2626;
-}
-
-.connection.connected {
-  background: #fefce8;
-  color: #854d0e;
-}
-
-.connection.connected .dot {
-  background: #eab308;
-}
-
-.connection.ready {
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.connection.ready .dot {
-  background: #16a34a;
-}
-
-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 4px;
-  color: #555;
-}
-
-input {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 13px;
-  box-sizing: border-box;
-}
-
-input:focus {
-  outline: none;
-  border-color: #a259ff;
+.auth-status.connected {
+  color: #16a34a;
 }
 
 button {
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   background: #a259ff;
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -105,46 +47,28 @@ button:disabled {
   margin-top: 12px;
   font-size: 13px;
   min-height: 20px;
+  word-break: break-word;
 }
 
 #status.success {
-  color: #1a8917;
+  color: #16a34a;
 }
 
 #status.error {
   color: #d32f2f;
 }
 
-#status.info {
-  color: #666;
+.footer {
+  margin-top: 16px;
+  text-align: center;
 }
 
-.settings {
-  margin-top: 12px;
-  font-size: 12px;
-  color: #666;
-}
-
-.settings summary {
-  cursor: pointer;
-  margin-bottom: 8px;
-}
-
-.settings input {
-  font-size: 12px;
-  padding: 6px;
-}
-
-.hint {
-  margin-top: 12px;
+.footer a {
   font-size: 11px;
-  color: #888;
-  line-height: 1.4;
+  color: #aaa;
+  text-decoration: none;
 }
 
-.hint code {
-  background: #f0f0f0;
-  padding: 1px 4px;
-  border-radius: 2px;
-  font-size: 11px;
+.footer a:hover {
+  color: #666;
 }
