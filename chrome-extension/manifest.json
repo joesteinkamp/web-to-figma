@@ -6,10 +6,13 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "nativeMessaging"
+    "storage",
+    "identity"
   ],
   "host_permissions": [
-    "https://mcp.figma.com/*"
+    "https://mcp.figma.com/*",
+    "https://www.figma.com/*",
+    "https://api.figma.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

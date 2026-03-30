@@ -7,19 +7,16 @@
 <body>
   <h1>Web to Figma</h1>
 
-  <div id="captureView">
-    <button id="captureBtn">Capture to Figma</button>
-    <div id="status"></div>
+  <div id="signedOut" style="display:none">
+    <button id="connectBtn">Connect to Figma</button>
   </div>
 
-  <div id="setupView" style="display:none">
-    <p class="setup-text">One-time setup: run this in your terminal:</p>
-    <div class="command-row">
-      <code id="setupCommand" class="command"></code>
-      <button id="copyBtn" class="copy-btn" title="Copy">Copy</button>
+  <div id="signedIn" style="display:none">
+    <button id="captureBtn">Capture to Figma</button>
+    <div id="status"></div>
+    <div class="footer">
+      <a href="#" id="logoutLink">Disconnect</a>
     </div>
-    <p class="setup-hint">Then click Retry below.</p>
-    <button id="retryBtn">Retry</button>
   </div>
 
   <script src="popup.js"></script>
