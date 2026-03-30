@@ -1,33 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const setupView = document.getElementById("setupView");
-  const captureView = document.getElementById("captureView");
   const captureBtn = document.getElementById("captureBtn");
-  const retryBtn = document.getElementById("retryBtn");
   const status = document.getElementById("status");
-
-  function showSetup() {
-    setupView.style.display = "block";
-    captureView.style.display = "none";
-  }
-
-  function showCapture() {
-    setupView.style.display = "none";
-    captureView.style.display = "block";
-  }
-
-  function checkServer() {
-    chrome.runtime.sendMessage({ action: "checkServer" }, (resp) => {
-      if (resp?.running) {
-        showCapture();
-      } else {
-        showSetup();
-      }
-    });
-  }
-
-  checkServer();
-
-  retryBtn.addEventListener("click", checkServer);
 
   captureBtn.addEventListener("click", async () => {
     status.textContent = "Capturing... (may take ~10s)";

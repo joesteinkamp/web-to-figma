@@ -4,33 +4,39 @@ One-click capture of any webpage to Figma.
 
 ## Prerequisites
 
+- **Node.js** (to run the native host script)
 - **Claude Code** with the Figma MCP server configured:
   ```
   claude mcp add --transport http figma https://mcp.figma.com/mcp
   ```
 
-## Setup
+## Setup (one time)
 
-1. Open `chrome://extensions/` in Chrome
-2. Enable **Developer mode**
-3. Click **Load unpacked** and select this `chrome-extension/` directory
+1. Load the extension:
+   - Open `chrome://extensions/`
+   - Enable **Developer mode**
+   - Click **Load unpacked** → select this `chrome-extension/` directory
+   - Copy your **extension ID** from the card
+
+2. Register the native messaging host:
+   ```bash
+   ./native-host/install.sh <your-extension-id>
+   ```
+
+3. Reload the extension in `chrome://extensions/`
 
 ## Usage
 
-1. Start the capture server (from the project root):
-   ```bash
-   npm run capture
-   ```
-2. Navigate to the webpage you want to capture
-3. Click the **Web to Figma** extension icon
-4. Click **Capture to Figma**
+1. Navigate to any webpage
+2. Click the **Web to Figma** extension icon
+3. Click **Capture to Figma**
 
-The extension calls the local server, which uses Claude Code's CLI to invoke `generate_figma_design` on Figma's MCP server. This takes ~10 seconds.
+No server to start. The extension spawns the native host on demand, which calls Claude Code to generate a Figma capture session.
 
 ## How It Works
 
-1. Extension sends the page title to `localhost:3131/generate-capture`
-2. The server runs `claude -p` to call `generate_figma_design` via Figma's MCP
-3. Server returns `captureId` + `endpoint` to the extension
-4. Extension fetches and injects Figma's capture script into the page
-5. Extension calls `captureForDesign()` — the design appears in your Figma drafts
+1. Extension sends a message via Chrome Native Messaging to `native-host/host.js`
+2. The host script runs `claude -p` to call `generate_figma_design` on Figma's MCP
+3. Host returns `captureId` + `endpoint` to the extension
+4. Extension injects Figma's capture script and calls `captureForDesign()`
+5. The design appears in your Figma drafts

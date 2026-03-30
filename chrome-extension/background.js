@@ -1,38 +1,27 @@
-const DEFAULT_SERVER = "http://localhost:3131";
+const NATIVE_HOST = "com.web_to_figma.capture";
 
-async function getServerUrl() {
-  const { serverUrl } = await chrome.storage.local.get(["serverUrl"]);
-  return serverUrl || DEFAULT_SERVER;
-}
-
-async function checkServer() {
-  const serverUrl = await getServerUrl();
-  try {
-    const resp = await fetch(`${serverUrl}/status`, {
-      signal: AbortSignal.timeout(2000),
+function callNativeHost(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendNativeMessage(NATIVE_HOST, message, (response) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      if (response.error) {
+        reject(new Error(response.error));
+        return;
+      }
+      resolve(response);
     });
-    return resp.ok;
-  } catch {
-    return false;
-  }
+  });
 }
 
 async function handleCapture(tab) {
-  const serverUrl = await getServerUrl();
-
-  // 1. Call local server → Claude Code → Figma MCP
-  const resp = await fetch(`${serverUrl}/generate-capture`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title: tab.title || "Web Capture" }),
+  // 1. Call native host → Claude Code → Figma MCP
+  const { captureId, endpoint } = await callNativeHost({
+    action: "generate-capture",
+    title: tab.title || "Web Capture",
   });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `Server error ${resp.status}` }));
-    throw new Error(err.error || "Server request failed");
-  }
-
-  const { captureId, endpoint } = await resp.json();
 
   // 2. Fetch Figma capture script
   const scriptResp = await fetch(
@@ -75,8 +64,6 @@ async function handleCapture(tab) {
   return { success: true, result: results[0]?.result };
 }
 
-// ─── Message Handler ───
-
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "capture") {
     (async () => {
@@ -92,11 +79,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ success: false, error: err.message });
       }
     })();
-    return true;
-  }
-
-  if (message.action === "checkServer") {
-    checkServer().then((running) => sendResponse({ running }));
     return true;
   }
 });

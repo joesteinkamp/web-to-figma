@@ -1,15 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Web to Figma",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "One-click capture of any webpage to Figma",
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "nativeMessaging"
   ],
   "host_permissions": [
-    "http://localhost:3131/*",
     "https://mcp.figma.com/*"
   ],
   "action": {
