@@ -12,25 +12,6 @@ h1 {
   margin: 0 0 12px;
 }
 
-.setup-text {
-  font-size: 13px;
-  color: #555;
-  margin: 0 0 8px;
-  line-height: 1.4;
-}
-
-code.command {
-  display: block;
-  background: #f5f5f5;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-family: "SF Mono", Monaco, Consolas, monospace;
-  font-size: 13px;
-  margin: 0 0 12px;
-  color: #333;
-}
-
 button {
   width: 100%;
   padding: 12px;
