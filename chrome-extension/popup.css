@@ -12,14 +12,26 @@ h1 {
   margin: 0 0 12px;
 }
 
-.auth-status {
-  font-size: 12px;
-  color: #888;
-  margin-bottom: 12px;
+.setup-text {
+  font-size: 13px;
+  color: #555;
+  margin: 0 0 12px;
+  line-height: 1.4;
 }
 
-.auth-status.connected {
-  color: #16a34a;
+input[type="password"] {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+input:focus {
+  outline: none;
+  border-color: #a259ff;
 }
 
 button {
@@ -56,6 +68,22 @@ button:disabled {
 
 #status.error {
   color: #d32f2f;
+}
+
+.hint {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.hint a {
+  color: #a259ff;
+  text-decoration: none;
+}
+
+.hint a:hover {
+  text-decoration: underline;
 }
 
 .footer {
