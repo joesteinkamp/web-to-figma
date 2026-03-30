@@ -6,8 +6,7 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage",
-    "identity"
+    "storage"
   ],
   "host_permissions": [
     "https://mcp.figma.com/*"

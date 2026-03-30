@@ -5,16 +5,26 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>Web to Figma</h1>
+  <!-- Setup view (shown when no token) -->
+  <div id="setupView" style="display:none">
+    <h1>Web to Figma</h1>
+    <p class="setup-text">Enter your Figma Personal Access Token to get started.</p>
+    <input type="password" id="tokenInput" placeholder="figd_...">
+    <button id="saveTokenBtn">Connect</button>
+    <p class="hint">
+      Create a token at
+      <a href="https://www.figma.com/developers/api#access-tokens" target="_blank">figma.com/developers</a>
+    </p>
+  </div>
 
-  <div id="authStatus" class="auth-status"></div>
-
-  <button id="captureBtn">Capture to Figma</button>
-
-  <div id="status"></div>
-
-  <div class="footer">
-    <a href="#" id="logoutLink">Sign out</a>
+  <!-- Capture view (shown when token exists) -->
+  <div id="captureView" style="display:none">
+    <h1>Web to Figma</h1>
+    <button id="captureBtn">Capture to Figma</button>
+    <div id="status"></div>
+    <div class="footer">
+      <a href="#" id="logoutLink">Disconnect</a>
+    </div>
   </div>
 
   <script src="popup.js"></script>

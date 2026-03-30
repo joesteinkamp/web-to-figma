@@ -2,174 +2,14 @@
 const MCP_BASE = "https://mcp.figma.com";
 const MCP_URL = `${MCP_BASE}/mcp`;
 
-// ─── PKCE Helpers ───
+// ─── Auth ───
 
-function base64url(buffer) {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function generateCodeVerifier() {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return base64url(array);
-}
-
-async function generateCodeChallenge(verifier) {
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(verifier)
-  );
-  return base64url(hash);
-}
-
-// ─── OAuth ───
-
-async function getOAuthMetadata() {
-  const resp = await fetch(
-    `${MCP_BASE}/.well-known/oauth-authorization-server`
-  );
-  if (!resp.ok)
-    throw new Error(`Failed to fetch OAuth metadata: ${resp.status}`);
-  return resp.json();
-}
-
-async function dynamicClientRegistration(metadata) {
-  if (!metadata.registration_endpoint) {
-    throw new Error(
-      "Figma MCP server does not support dynamic client registration"
-    );
+async function getFigmaToken() {
+  const { figmaPAT } = await chrome.storage.local.get(["figmaPAT"]);
+  if (!figmaPAT) {
+    throw new Error("NO_TOKEN");
   }
-  const redirectUri = chrome.identity.getRedirectURL();
-  const resp = await fetch(metadata.registration_endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_name: "Web to Figma Chrome Extension",
-      redirect_uris: [redirectUri],
-      grant_types: ["authorization_code"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    throw new Error(`Client registration failed (${resp.status}): ${text}`);
-  }
-  return resp.json();
-}
-
-async function getAccessToken() {
-  const stored = await chrome.storage.local.get([
-    "figmaAccessToken",
-    "figmaRefreshToken",
-    "figmaTokenExpiry",
-    "figmaClientId",
-  ]);
-
-  // Valid token exists
-  if (stored.figmaAccessToken && stored.figmaTokenExpiry > Date.now() + 60000) {
-    return stored.figmaAccessToken;
-  }
-
-  // Try refresh
-  if (stored.figmaRefreshToken && stored.figmaClientId) {
-    try {
-      const metadata = await getOAuthMetadata();
-      return await refreshAccessToken(metadata, stored);
-    } catch {
-      // Fall through to full auth
-    }
-  }
-
-  // Full OAuth flow
-  return await fullOAuthFlow();
-}
-
-async function fullOAuthFlow() {
-  const metadata = await getOAuthMetadata();
-
-  // Register client if needed
-  let { figmaClientId } = await chrome.storage.local.get(["figmaClientId"]);
-  if (!figmaClientId) {
-    const reg = await dynamicClientRegistration(metadata);
-    figmaClientId = reg.client_id;
-    await chrome.storage.local.set({ figmaClientId });
-  }
-
-  const verifier = generateCodeVerifier();
-  const challenge = await generateCodeChallenge(verifier);
-  const redirectUri = chrome.identity.getRedirectURL();
-
-  const authUrl = new URL(metadata.authorization_endpoint);
-  authUrl.searchParams.set("client_id", figmaClientId);
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("code_challenge", challenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
-  if (metadata.scopes_supported?.length) {
-    authUrl.searchParams.set("scope", metadata.scopes_supported.join(" "));
-  }
-
-  const resultUrl = await chrome.identity.launchWebAuthFlow({
-    url: authUrl.toString(),
-    interactive: true,
-  });
-
-  const code = new URL(resultUrl).searchParams.get("code");
-  if (!code) throw new Error("No authorization code received from Figma");
-
-  // Exchange code for tokens
-  const tokenResp = await fetch(metadata.token_endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-      client_id: figmaClientId,
-      code_verifier: verifier,
-    }),
-  });
-
-  if (!tokenResp.ok) {
-    const text = await tokenResp.text().catch(() => "");
-    throw new Error(`Token exchange failed (${tokenResp.status}): ${text}`);
-  }
-
-  const tokens = await tokenResp.json();
-  await chrome.storage.local.set({
-    figmaAccessToken: tokens.access_token,
-    figmaRefreshToken: tokens.refresh_token || null,
-    figmaTokenExpiry: Date.now() + (tokens.expires_in || 3600) * 1000,
-  });
-
-  return tokens.access_token;
-}
-
-async function refreshAccessToken(metadata, stored) {
-  const resp = await fetch(metadata.token_endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: stored.figmaRefreshToken,
-      client_id: stored.figmaClientId,
-    }),
-  });
-
-  if (!resp.ok) throw new Error("Token refresh failed");
-  const tokens = await resp.json();
-
-  await chrome.storage.local.set({
-    figmaAccessToken: tokens.access_token,
-    figmaRefreshToken: tokens.refresh_token || stored.figmaRefreshToken,
-    figmaTokenExpiry: Date.now() + (tokens.expires_in || 3600) * 1000,
-  });
-
-  return tokens.access_token;
+  return figmaPAT;
 }
 
 // ─── MCP Streamable HTTP Client ───
@@ -179,7 +19,7 @@ let mcpInitialized = false;
 let mcpNextId = 1;
 
 async function mcpRequest(method, params, isNotification = false) {
-  const token = await getAccessToken();
+  const token = await getFigmaToken();
   const headers = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
@@ -202,9 +42,11 @@ async function mcpRequest(method, params, isNotification = false) {
   const newSessionId = resp.headers.get("mcp-session-id");
   if (newSessionId) mcpSessionId = newSessionId;
 
-  if (resp.status === 401) {
-    await chrome.storage.local.remove(["figmaAccessToken"]);
-    throw new Error("AUTH_EXPIRED");
+  if (resp.status === 401 || resp.status === 403) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(
+      `Figma auth failed (${resp.status}). Check your Personal Access Token. ${text}`
+    );
   }
 
   if (!resp.ok) {
@@ -256,6 +98,7 @@ async function ensureMcpSession() {
 function resetMcpSession() {
   mcpInitialized = false;
   mcpSessionId = null;
+  mcpNextId = 1;
 }
 
 // ─── One-Click Capture ───
@@ -280,8 +123,12 @@ async function handleCapture(tab) {
           endpoint = endpoint || parsed.endpoint;
         } catch {
           // Try regex extraction as fallback
-          const idMatch = item.text.match(/captureId["'\s:]+([a-zA-Z0-9_-]+)/);
-          const epMatch = item.text.match(/endpoint["'\s:]+(https?:\/\/[^\s"']+)/);
+          const idMatch = item.text.match(
+            /captureId["'\s:]+([a-zA-Z0-9_-]+)/
+          );
+          const epMatch = item.text.match(
+            /endpoint["'\s:]+(https?:\/\/[^\s"']+)/
+          );
           if (idMatch) captureId = captureId || idMatch[1];
           if (epMatch) endpoint = endpoint || epMatch[1];
         }
@@ -292,7 +139,7 @@ async function handleCapture(tab) {
   if (!captureId || !endpoint) {
     throw new Error(
       "Could not get capture config from Figma. Response: " +
-        JSON.stringify(toolResult).slice(0, 200)
+        JSON.stringify(toolResult).slice(0, 300)
     );
   }
 
@@ -351,55 +198,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const result = await handleCapture(tab);
         sendResponse(result);
       } catch (err) {
-        // Retry once on auth expiry
-        if (err.message === "AUTH_EXPIRED") {
-          try {
-            resetMcpSession();
-            const [tab] = await chrome.tabs.query({
-              active: true,
-              currentWindow: true,
-            });
-            const result = await handleCapture(tab);
-            sendResponse(result);
-            return;
-          } catch (retryErr) {
-            sendResponse({ success: false, error: retryErr.message });
-            return;
-          }
-        }
         sendResponse({ success: false, error: err.message });
       }
     })();
-    return true; // keep channel open for async
+    return true;
   }
 
   if (message.action === "checkAuth") {
-    chrome.storage.local.get(
-      ["figmaAccessToken", "figmaTokenExpiry"],
-      (data) => {
-        sendResponse({
-          authenticated: !!(
-            data.figmaAccessToken && data.figmaTokenExpiry > Date.now()
-          ),
-        });
-      }
-    );
+    chrome.storage.local.get(["figmaPAT"], (data) => {
+      sendResponse({ authenticated: !!data.figmaPAT });
+    });
+    return true;
+  }
+
+  if (message.action === "saveToken") {
+    chrome.storage.local.set({ figmaPAT: message.token }, () => {
+      resetMcpSession();
+      sendResponse({ success: true });
+    });
     return true;
   }
 
   if (message.action === "logout") {
-    chrome.storage.local.remove(
-      [
-        "figmaAccessToken",
-        "figmaRefreshToken",
-        "figmaTokenExpiry",
-        "figmaClientId",
-      ],
-      () => {
-        resetMcpSession();
-        sendResponse({ success: true });
-      }
-    );
+    chrome.storage.local.remove(["figmaPAT"], () => {
+      resetMcpSession();
+      sendResponse({ success: true });
+    });
     return true;
   }
 });

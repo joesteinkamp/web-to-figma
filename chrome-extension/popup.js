@@ -1,20 +1,47 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const setupView = document.getElementById("setupView");
+  const captureView = document.getElementById("captureView");
+  const tokenInput = document.getElementById("tokenInput");
+  const saveTokenBtn = document.getElementById("saveTokenBtn");
   const captureBtn = document.getElementById("captureBtn");
   const status = document.getElementById("status");
-  const authStatus = document.getElementById("authStatus");
   const logoutLink = document.getElementById("logoutLink");
 
-  // Check auth on open
+  function showSetup() {
+    setupView.style.display = "block";
+    captureView.style.display = "none";
+  }
+
+  function showCapture() {
+    setupView.style.display = "none";
+    captureView.style.display = "block";
+  }
+
+  // Check if token exists
   chrome.runtime.sendMessage({ action: "checkAuth" }, (resp) => {
     if (resp?.authenticated) {
-      authStatus.textContent = "Connected to Figma";
-      authStatus.className = "auth-status connected";
+      showCapture();
     } else {
-      authStatus.textContent = "Will sign in on first capture";
-      authStatus.className = "auth-status";
+      showSetup();
     }
   });
 
+  // Save token
+  saveTokenBtn.addEventListener("click", () => {
+    const token = tokenInput.value.trim();
+    if (!token) return;
+
+    chrome.runtime.sendMessage({ action: "saveToken", token }, () => {
+      showCapture();
+    });
+  });
+
+  // Also save on Enter
+  tokenInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveTokenBtn.click();
+  });
+
+  // Capture
   captureBtn.addEventListener("click", async () => {
     status.textContent = "Capturing...";
     status.className = "";
@@ -26,10 +53,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (response.success) {
         status.textContent = "Sent to Figma!";
         status.className = "success";
-        // Update auth status
-        authStatus.textContent = "Connected to Figma";
-        authStatus.className = "auth-status connected";
       } else {
+        if (response.error === "NO_TOKEN") {
+          showSetup();
+          return;
+        }
         status.textContent = response.error;
         status.className = "error";
       }
@@ -41,11 +69,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Logout
   logoutLink.addEventListener("click", (e) => {
     e.preventDefault();
     chrome.runtime.sendMessage({ action: "logout" }, () => {
-      authStatus.textContent = "Signed out";
-      authStatus.className = "auth-status";
+      showSetup();
       status.textContent = "";
     });
   });
