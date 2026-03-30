@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Web to Figma",
-  "version": "1.0.0",
-  "description": "Capture the current webpage and send it to a Figma file",
+  "version": "2.0.0",
+  "description": "One-click capture of any webpage to Figma",
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "identity"
   ],
   "host_permissions": [
     "https://mcp.figma.com/*"

@@ -7,6 +7,9 @@ let browser = null;
 let context = null;
 let page = null;
 
+// Stored capture config (set by Claude Code, consumed by Chrome extension)
+let pendingCaptureConfig = null;
+
 async function main() {
   browser = await chromium.launch({ headless: false });
 
@@ -27,11 +30,44 @@ async function main() {
   const app = express();
   app.use(express.json({ limit: "10mb" }));
 
+  // CORS: allow Chrome extension to call the server
+  app.use((_req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
+    next();
+  });
+  app.options("*", (_req, res) => res.sendStatus(204));
+
   app.get("/status", (_req, res) => {
     res.json({
       ready: !!page,
       url: page ? page.url() : null,
     });
+  });
+
+  // Store capture config (called by Claude Code after getting captureId/endpoint from Figma MCP)
+  app.post("/prepare-capture", (req, res) => {
+    const { captureId, endpoint } = req.body;
+    if (!captureId || !endpoint)
+      return res.status(400).json({ error: "captureId and endpoint are required" });
+    pendingCaptureConfig = { captureId, endpoint, createdAt: Date.now() };
+    console.log(`Capture config stored (captureId: ${captureId.slice(0, 8)}...)`);
+    res.json({ success: true });
+  });
+
+  // Retrieve stored capture config (called by Chrome extension)
+  app.get("/capture-config", (_req, res) => {
+    if (!pendingCaptureConfig) {
+      return res.status(404).json({ error: "No capture config available. Ask Claude Code to prepare one." });
+    }
+    res.json(pendingCaptureConfig);
+  });
+
+  // Clear capture config after use
+  app.delete("/capture-config", (_req, res) => {
+    pendingCaptureConfig = null;
+    res.json({ success: true });
   });
 
   app.post("/navigate", async (req, res) => {
@@ -115,12 +151,14 @@ async function main() {
     console.log("Browse freely — then call POST /capture-figma when ready.");
     console.log("");
     console.log("Endpoints:");
-    console.log("  GET  /status         - current page URL");
-    console.log("  POST /navigate       - { url } open a page");
-    console.log("  POST /inject         - { script } run JS in page");
-    console.log("  POST /capture-figma  - { captureId, endpoint } capture to Figma");
-    console.log("  POST /screenshot     - full-page screenshot as base64");
-    console.log("  POST /close          - shut down");
+    console.log("  GET  /status          - current page URL");
+    console.log("  POST /prepare-capture - { captureId, endpoint } store config for Chrome extension");
+    console.log("  GET  /capture-config  - retrieve stored config (used by Chrome extension)");
+    console.log("  POST /navigate        - { url } open a page");
+    console.log("  POST /inject          - { script } run JS in page");
+    console.log("  POST /capture-figma   - { captureId, endpoint } capture to Figma");
+    console.log("  POST /screenshot      - full-page screenshot as base64");
+    console.log("  POST /close           - shut down");
   });
 
   async function shutdown() {

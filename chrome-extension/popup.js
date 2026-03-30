@@ -1,52 +1,52 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const captureIdInput = document.getElementById("captureId");
-  const endpointInput = document.getElementById("endpoint");
   const captureBtn = document.getElementById("captureBtn");
   const status = document.getElementById("status");
+  const authStatus = document.getElementById("authStatus");
+  const logoutLink = document.getElementById("logoutLink");
 
-  // Restore saved endpoint
-  chrome.storage.local.get(["endpoint"], (data) => {
-    if (data.endpoint) {
-      endpointInput.value = data.endpoint;
+  // Check auth on open
+  chrome.runtime.sendMessage({ action: "checkAuth" }, (resp) => {
+    if (resp?.authenticated) {
+      authStatus.textContent = "Connected to Figma";
+      authStatus.className = "auth-status connected";
+    } else {
+      authStatus.textContent = "Will sign in on first capture";
+      authStatus.className = "auth-status";
     }
   });
 
   captureBtn.addEventListener("click", async () => {
-    const captureId = captureIdInput.value.trim();
-    const endpoint = endpointInput.value.trim();
-
-    if (!captureId || !endpoint) {
-      status.textContent = "Both fields are required.";
-      status.className = "error";
-      return;
-    }
-
-    // Save endpoint for reuse
-    chrome.storage.local.set({ endpoint });
-
     status.textContent = "Capturing...";
     status.className = "";
     captureBtn.disabled = true;
 
     try {
-      const response = await chrome.runtime.sendMessage({
-        action: "capture",
-        captureId,
-        endpoint,
-      });
+      const response = await chrome.runtime.sendMessage({ action: "capture" });
 
       if (response.success) {
-        status.textContent = "Capture sent successfully!";
+        status.textContent = "Sent to Figma!";
         status.className = "success";
+        // Update auth status
+        authStatus.textContent = "Connected to Figma";
+        authStatus.className = "auth-status connected";
       } else {
-        status.textContent = `Error: ${response.error}`;
+        status.textContent = response.error;
         status.className = "error";
       }
     } catch (err) {
-      status.textContent = `Error: ${err.message}`;
+      status.textContent = err.message;
       status.className = "error";
     } finally {
       captureBtn.disabled = false;
     }
+  });
+
+  logoutLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.runtime.sendMessage({ action: "logout" }, () => {
+      authStatus.textContent = "Signed out";
+      authStatus.className = "auth-status";
+      status.textContent = "";
+    });
   });
 });
