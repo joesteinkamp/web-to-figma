@@ -5,6 +5,24 @@
 // Protocol: [4-byte little-endian length][JSON payload]
 
 const { execFile } = require("child_process");
+const os = require("os");
+
+// Chrome spawns native hosts with a limited PATH. Add common install locations.
+const extraPaths = [
+  "/usr/local/bin",
+  "/opt/homebrew/bin",
+  `${os.homedir()}/.local/bin`,
+  `${os.homedir()}/.nvm/versions/node`,
+  "/usr/bin",
+  "/bin",
+];
+process.env.PATH = `${process.env.PATH || ""}:${extraPaths.join(":")}`;
+
+// Catch any unhandled errors so we can report them
+process.on("uncaughtException", (err) => {
+  sendMessage({ error: `Host crash: ${err.message}` });
+  process.exit(1);
+});
 
 function readMessage() {
   return new Promise((resolve, reject) => {
