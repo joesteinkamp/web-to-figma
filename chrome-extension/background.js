@@ -71,7 +71,7 @@ async function doOAuthFlow() {
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("code_challenge", challenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
-  authUrl.searchParams.set("scope", "files:read file_content:read");
+  authUrl.searchParams.set("scope", "file_content:read file_metadata:read file_versions:read");
   authUrl.searchParams.set("state", crypto.randomUUID());
 
   console.log("OAuth URL:", authUrl.toString());
