@@ -1,71 +1,62 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const signedOut = document.getElementById("signedOut");
-  const signedIn = document.getElementById("signedIn");
-  const connectBtn = document.getElementById("connectBtn");
+  const captureView = document.getElementById("captureView");
+  const setupView = document.getElementById("setupView");
   const captureBtn = document.getElementById("captureBtn");
   const status = document.getElementById("status");
-  const logoutLink = document.getElementById("logoutLink");
+  const setupCommand = document.getElementById("setupCommand");
+  const copyBtn = document.getElementById("copyBtn");
+  const retryBtn = document.getElementById("retryBtn");
 
-  function showSignedOut() {
-    signedOut.style.display = "block";
-    signedIn.style.display = "none";
+  function showSetup() {
+    const extId = chrome.runtime.id;
+    setupCommand.textContent = `./native-host/install.sh ${extId}`;
+    captureView.style.display = "none";
+    setupView.style.display = "block";
   }
 
-  function showSignedIn() {
-    signedOut.style.display = "none";
-    signedIn.style.display = "block";
+  function showCapture() {
+    captureView.style.display = "block";
+    setupView.style.display = "none";
   }
 
-  // Check auth on open
-  chrome.runtime.sendMessage({ action: "checkAuth" }, (resp) => {
-    if (resp?.authenticated) {
-      showSignedIn();
-    } else {
-      showSignedOut();
-    }
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(setupCommand.textContent);
+    copyBtn.textContent = "Copied!";
+    setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
   });
 
-  // Connect triggers OAuth, then immediately captures
-  connectBtn.addEventListener("click", () => {
-    doCapture();
+  retryBtn.addEventListener("click", () => {
+    showCapture();
+    status.textContent = "";
+    status.className = "";
   });
 
-  captureBtn.addEventListener("click", () => {
-    doCapture();
-  });
-
-  async function doCapture() {
-    status.textContent = "Capturing...";
+  captureBtn.addEventListener("click", async () => {
+    status.textContent = "Capturing... (may take ~10s)";
     status.className = "";
     captureBtn.disabled = true;
-    connectBtn.disabled = true;
 
     try {
       const response = await chrome.runtime.sendMessage({ action: "capture" });
 
       if (response.success) {
-        showSignedIn();
         status.textContent = "Sent to Figma!";
         status.className = "success";
+      } else if (response.error?.includes("native messaging host not found")) {
+        showSetup();
       } else {
-        showSignedIn();
         status.textContent = response.error;
         status.className = "error";
       }
     } catch (err) {
-      status.textContent = err.message;
-      status.className = "error";
+      if (err.message?.includes("native messaging host not found")) {
+        showSetup();
+      } else {
+        status.textContent = err.message;
+        status.className = "error";
+      }
     } finally {
       captureBtn.disabled = false;
-      connectBtn.disabled = false;
     }
-  }
-
-  logoutLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    chrome.runtime.sendMessage({ action: "logout" }, () => {
-      showSignedOut();
-      status.textContent = "";
-    });
   });
 });
