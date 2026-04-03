@@ -1,5 +1,12 @@
 const NATIVE_HOST = "com.web_to_figma.capture";
 
+let captureState = { active: false, step: 0 };
+
+function sendProgress(step, error) {
+  captureState = { active: !error && step < 3, step, error: error || null };
+  chrome.runtime.sendMessage({ action: "capture-progress", step, error: error || null }).catch(() => {});
+}
+
 function callNativeHost(message) {
   return new Promise((resolve, reject) => {
     chrome.runtime.sendNativeMessage(NATIVE_HOST, message, (response) => {
@@ -17,20 +24,21 @@ function callNativeHost(message) {
 }
 
 async function handleCapture(tab) {
-  // 1. Call native host → Claude Code → Figma MCP
+  // Step 1: Call native host → Claude Code → Figma MCP
+  sendProgress(1);
   const { captureId, endpoint } = await callNativeHost({
     action: "generate-capture",
     title: tab.title || "Web Capture",
   });
 
-  // 2. Fetch Figma capture script
+  // Step 2: Fetch and inject Figma capture script
+  sendProgress(2);
   const scriptResp = await fetch(
     "https://mcp.figma.com/mcp/html-to-design/capture.js"
   );
   if (!scriptResp.ok) throw new Error("Failed to fetch Figma capture script");
   const scriptText = await scriptResp.text();
 
-  // 3. Inject script into page
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: (code) => {
@@ -44,7 +52,10 @@ async function handleCapture(tab) {
 
   await new Promise((r) => setTimeout(r, 1000));
 
-  // 4. Trigger capture
+  // Step 3: Overlay appears the moment captureForDesign is called
+  sendProgress(3);
+  setTimeout(() => { captureState = { active: false, step: 0 }; }, 5000);
+
   const results = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: (cid, ep) => {
@@ -65,7 +76,13 @@ async function handleCapture(tab) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.action === "capture-status") {
+    sendResponse(captureState);
+    return false;
+  }
+
   if (message.action === "capture") {
+    sendResponse({ started: true });
     (async () => {
       try {
         const [tab] = await chrome.tabs.query({
@@ -73,10 +90,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           currentWindow: true,
         });
         if (!tab) throw new Error("No active tab found");
-        const result = await handleCapture(tab);
-        sendResponse(result);
+        await handleCapture(tab);
       } catch (err) {
-        sendResponse({ success: false, error: err.message });
+        sendProgress(0, err.message);
       }
     })();
     return true;

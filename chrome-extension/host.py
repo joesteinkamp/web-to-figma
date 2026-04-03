@@ -7,6 +7,11 @@ import subprocess
 import sys
 import re
 import os
+import logging
+
+LOG_PATH = os.path.expanduser("~/.web-to-figma-host.log")
+logging.basicConfig(filename=LOG_PATH, level=logging.DEBUG,
+                    format="%(asctime)s %(levelname)s %(message)s")
 
 def read_message():
     header = sys.stdin.buffer.read(4)
@@ -54,7 +59,9 @@ def extract_config(text):
 
 def main():
     try:
+        logging.info("Host started")
         message = read_message()
+        logging.info("Message received: %s", message)
         if not message:
             send_message({"error": "No message received"})
             return
@@ -64,6 +71,7 @@ def main():
             return
 
         claude = find_claude()
+        logging.info("Claude CLI path: %s", claude)
         if not claude:
             send_message({"error": "Claude Code not found. Install from https://claude.ai/code"})
             return
@@ -76,12 +84,18 @@ def main():
             "Return ONLY the JSON object containing captureId and endpoint. No other text."
         )
 
+        logging.info("Running: %s -p ...", claude)
         result = subprocess.run(
-            [claude, "-p", prompt, "--output-format", "json"],
+            [claude, "-p", prompt, "--output-format", "json", "--allowedTools", "mcp__figma__generate_figma_design,mcp__figma__get_metadata"],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=90,
         )
+        logging.info("Claude exit code: %s", result.returncode)
+        logging.debug("Claude stdout: %.500s", result.stdout)
+        if result.stderr:
+            logging.debug("Claude stderr: %.500s", result.stderr)
 
         text = result.stdout
         try:
@@ -91,6 +105,7 @@ def main():
             pass
 
         config = extract_config(str(text))
+        logging.info("Extracted config: %s", config)
 
         if config["captureId"] and config["endpoint"]:
             send_message(config)
@@ -98,8 +113,10 @@ def main():
             send_message({"error": "Could not get captureId/endpoint. Is Figma MCP configured in Claude Code?"})
 
     except subprocess.TimeoutExpired:
+        logging.error("Timed out waiting for Claude")
         send_message({"error": "Timed out (90s). Try again."})
     except Exception as e:
+        logging.exception("Host error")
         send_message({"error": f"Host error: {str(e)}"})
 
 if __name__ == "__main__":

@@ -3,9 +3,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const setupView = document.getElementById("setupView");
   const captureBtn = document.getElementById("captureBtn");
   const status = document.getElementById("status");
+  const progress = document.getElementById("progress");
+  const steps = progress.querySelectorAll(".step");
   const setupCommand = document.getElementById("setupCommand");
   const copyBtn = document.getElementById("copyBtn");
   const retryBtn = document.getElementById("retryBtn");
+
+  let closeTimeout = null;
 
   function showSetup() {
     const extId = chrome.runtime.id;
@@ -19,6 +23,69 @@ document.addEventListener("DOMContentLoaded", () => {
     setupView.style.display = "none";
   }
 
+  function startProgressUI() {
+    captureBtn.style.display = "none";
+    progress.style.display = "block";
+    status.textContent = "";
+    status.className = "";
+  }
+
+  function resetUI() {
+    captureBtn.style.display = "";
+    captureBtn.disabled = false;
+    progress.style.display = "none";
+    steps.forEach((s) => { s.className = "step"; });
+    if (closeTimeout) { clearTimeout(closeTimeout); closeTimeout = null; }
+  }
+
+  function setStep(n) {
+    steps.forEach((s) => {
+      const stepNum = parseInt(s.dataset.step);
+      if (stepNum < n) {
+        s.className = "step done";
+        s.querySelector(".step-icon").textContent = "\u2713";
+      } else if (stepNum === n) {
+        s.className = "step active";
+        s.querySelector(".step-icon").textContent = "*";
+      } else {
+        s.className = "step";
+        s.querySelector(".step-icon").textContent = "*";
+      }
+    });
+
+    if (n === 3) {
+      closeTimeout = setTimeout(() => window.close(), 8000);
+    }
+  }
+
+  // Listen for progress broadcasts from background
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action !== "capture-progress") return;
+
+    if (msg.error) {
+      resetUI();
+      if (msg.error.includes("native messaging host not found")) {
+        showSetup();
+      } else {
+        status.textContent = msg.error;
+        status.className = "error";
+      }
+      return;
+    }
+
+    startProgressUI();
+    setStep(msg.step);
+  });
+
+  // Restore state if popup reopened mid-capture
+  chrome.runtime.sendMessage({ action: "capture-status" }, (resp) => {
+    if (chrome.runtime.lastError) return;
+    if (resp?.active) {
+      startProgressUI();
+      setStep(resp.step);
+    }
+  });
+
   copyBtn.addEventListener("click", () => {
     navigator.clipboard.writeText(setupCommand.textContent);
     copyBtn.textContent = "Copied!";
@@ -27,36 +94,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
   retryBtn.addEventListener("click", () => {
     showCapture();
-    status.textContent = "";
-    status.className = "";
+    resetUI();
   });
 
-  captureBtn.addEventListener("click", async () => {
-    status.textContent = "Capturing... (may take ~10s)";
-    status.className = "";
-    captureBtn.disabled = true;
+  captureBtn.addEventListener("click", () => {
+    startProgressUI();
+    setStep(1);
 
-    try {
-      const response = await chrome.runtime.sendMessage({ action: "capture" });
-
-      if (response.success) {
-        status.textContent = "Sent to Figma!";
-        status.className = "success";
-      } else if (response.error?.includes("native messaging host not found")) {
-        showSetup();
-      } else {
-        status.textContent = response.error;
+    chrome.runtime.sendMessage({ action: "capture" }, (response) => {
+      if (chrome.runtime.lastError) {
+        resetUI();
+        status.textContent = chrome.runtime.lastError.message;
         status.className = "error";
+        return;
       }
-    } catch (err) {
-      if (err.message?.includes("native messaging host not found")) {
-        showSetup();
-      } else {
-        status.textContent = err.message;
-        status.className = "error";
+      if (response?.error) {
+        resetUI();
+        if (response.error.includes("native messaging host not found")) {
+          showSetup();
+        } else {
+          status.textContent = response.error;
+          status.className = "error";
+        }
       }
-    } finally {
-      captureBtn.disabled = false;
-    }
+      // Success handled via capture-progress listener
+    });
   });
 });
