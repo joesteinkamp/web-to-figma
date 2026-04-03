@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Web to Figma</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1a1a1a;
+      background: #fafafa;
+      line-height: 1.7;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 36px;
+      margin-bottom: 12px;
+    }
+    p, li {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 12px;
+    }
+    ul {
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+    li { margin-bottom: 6px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 15px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 14px;
+      border: 1px solid #e0e0e0;
+    }
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+    }
+    a { color: #a259ff; }
+    .badge {
+      display: inline-block;
+      background: #a259ff;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid #e0e0e0;
+      color: #999;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge">Web to Figma</span>
+    <h1>Privacy Policy</h1>
+    <p class="subtitle">Effective date: April 3, 2026</p>
+
+    <h2>Overview</h2>
+    <p>
+      Web to Figma is a Chrome extension that captures webpages and converts them into editable Figma designs.
+      This extension is designed with privacy in mind. It does not collect, store, or transmit your personal data
+      to any third-party analytics, advertising, or tracking services.
+    </p>
+
+    <h2>Data Collection</h2>
+    <p>Web to Figma does <strong>not</strong> collect or store any of the following:</p>
+    <ul>
+      <li>Personal information (name, email, account details)</li>
+      <li>Browsing history</li>
+      <li>Cookies or tracking identifiers</li>
+      <li>Analytics or telemetry data</li>
+      <li>Crash reports</li>
+    </ul>
+
+    <h2>Data the Extension Accesses</h2>
+    <p>During the capture process, the extension temporarily accesses the following data. None of it is stored or transmitted to the extension developer.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Purpose</th>
+          <th>Where It Goes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Active tab title</td>
+          <td>Used as the label for the Figma capture</td>
+          <td>Sent to Claude Code running locally on your machine</td>
+        </tr>
+        <tr>
+          <td>Page DOM content</td>
+          <td>Captured by Figma's overlay script to generate the design</td>
+          <td>Sent directly to Figma's servers by their capture script</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Permissions</h2>
+    <p>The extension requests the following browser permissions, each for a specific purpose:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Permission</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>activeTab</code></td>
+          <td>Read the title of the current tab to label the Figma capture</td>
+        </tr>
+        <tr>
+          <td><code>scripting</code></td>
+          <td>Inject Figma's capture overlay script into the active page</td>
+        </tr>
+        <tr>
+          <td><code>nativeMessaging</code></td>
+          <td>Communicate with the Claude Code CLI running locally on your machine</td>
+        </tr>
+        <tr>
+          <td><code>host_permissions: https://mcp.figma.com/*</code></td>
+          <td>Fetch Figma's official capture script</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Native Messaging</h2>
+    <p>
+      This extension uses Chrome's native messaging API to communicate with a local process on your computer.
+      The native messaging host invokes the Claude Code CLI, which in turn calls Figma's MCP server to initiate the capture.
+      All communication happens locally between your browser and a process running on your own machine.
+      No data is sent to remote servers operated by the extension developer.
+    </p>
+
+    <h2>Third-Party Services</h2>
+    <p>The extension relies on two third-party services during the capture process:</p>
+    <ul>
+      <li><strong>Claude Code (Anthropic)</strong> &mdash; runs locally on your machine. Invoked via the native messaging host to call Figma's MCP server. Subject to <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">Anthropic's Privacy Policy</a>.</li>
+      <li><strong>Figma</strong> &mdash; provides the capture script and processes the captured page content to generate the design file. Subject to <a href="https://www.figma.com/privacy/" target="_blank" rel="noopener">Figma's Privacy Policy</a>.</li>
+    </ul>
+
+    <h2>Data Retention</h2>
+    <p>
+      The extension does not persist any data beyond the duration of a single capture session.
+      No data is written to local storage, cookies, or files by the extension itself. The native messaging host
+      writes only a debug log file (<code>~/.web-to-figma-host.log</code>) on your local machine, which contains
+      only operational status messages and no page content or personal data.
+    </p>
+
+    <h2>Children's Privacy</h2>
+    <p>
+      This extension is not directed at children under 13. It does not knowingly collect any personal information
+      from children.
+    </p>
+
+    <h2>Changes to This Policy</h2>
+    <p>
+      If this privacy policy is updated, the revised version will be posted at this URL with an updated effective date.
+    </p>
+
+    <h2>Contact</h2>
+    <p>
+      For questions about this privacy policy, please open an issue on the
+      <a href="https://github.com/joesteinkamp/web-to-figma" target="_blank" rel="noopener">GitHub repository</a>.
+    </p>
+
+    <footer>
+      &copy; 2026 Web to Figma. This extension is open source and available on
+      <a href="https://github.com/joesteinkamp/web-to-figma" target="_blank" rel="noopener">GitHub</a>.
+    </footer>
+  </div>
+</body>
+</html>
