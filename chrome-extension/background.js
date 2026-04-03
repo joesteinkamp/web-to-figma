@@ -99,20 +99,22 @@ async function doOAuthFlow() {
     );
   }
 
-  // Exchange code for token
+  // Exchange code for token (Figma requires HTTP Basic Auth)
+  const basicAuth = btoa(`${FIGMA_CLIENT_ID}:${FIGMA_CLIENT_SECRET}`);
   const tokenBody = {
     grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri,
-    client_id: FIGMA_CLIENT_ID,
-    client_secret: FIGMA_CLIENT_SECRET,
     code_verifier: verifier,
   };
   console.log("Token exchange request to:", FIGMA_TOKEN_URL);
 
   const tokenResp = await fetch(FIGMA_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${basicAuth}`,
+    },
     body: new URLSearchParams(tokenBody),
   });
 
@@ -134,14 +136,16 @@ async function doOAuthFlow() {
 }
 
 async function refreshToken(refreshToken) {
+  const basicAuth = btoa(`${FIGMA_CLIENT_ID}:${FIGMA_CLIENT_SECRET}`);
   const resp = await fetch(FIGMA_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${basicAuth}`,
+    },
     body: new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
-      client_id: FIGMA_CLIENT_ID,
-      client_secret: FIGMA_CLIENT_SECRET,
     }),
   });
 
