@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function showSetup() {
     const extId = chrome.runtime.id;
-    setupCommand.textContent = `./install.sh ${extId}`;
+    setupCommand.textContent = `curl -fsSL https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/setup.sh | bash -s -- ${extId}`;
     captureView.style.display = "none";
     setupView.style.display = "block";
   }
