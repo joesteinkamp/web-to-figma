@@ -66,7 +66,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (n === 3) {
-      closeTimeout = setTimeout(() => window.close(), 8000);
+      // Loading for 3s, then check, then 8s to close
+      setTimeout(() => {
+        const step3 = progress.querySelector('[data-step="3"]');
+        step3.className = "step done";
+        step3.querySelector(".step-icon").textContent = "\u2713";
+        closeTimeout = setTimeout(() => window.close(), 5000);
+      }, 6000);
     }
   }
 

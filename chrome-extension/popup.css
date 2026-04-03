@@ -34,10 +34,12 @@ button:disabled {
 }
 
 #status {
-  margin-top: 12px;
   font-size: 13px;
-  min-height: 20px;
   word-break: break-word;
+}
+
+#status:not(:empty) {
+  margin-top: 12px;
 }
 
 #status.success {
@@ -194,7 +196,7 @@ button:disabled {
 /* Footer */
 
 #footer {
-  margin-top: 16px;
+  margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid #eee;
   text-align: center;

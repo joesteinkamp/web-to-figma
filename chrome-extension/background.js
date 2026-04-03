@@ -24,45 +24,42 @@ function callNativeHost(message) {
 }
 
 async function handleCapture(tab) {
-  // Step 1: Call native host → Claude Code → Figma MCP
+  // All real work starts immediately in parallel
   sendProgress(1);
-  const { captureId, endpoint } = await callNativeHost({
-    action: "generate-capture",
-    title: tab.title || "Web Capture",
-  });
+  const workDone = Promise.all([
+    callNativeHost({
+      action: "generate-capture",
+      title: tab.title || "Web Capture",
+    }),
+    fetch("https://mcp.figma.com/mcp/html-to-design/capture.js")
+      .then((r) => { if (!r.ok) throw new Error("Failed to fetch Figma capture script"); return r.text(); })
+      .then((scriptText) => chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (code) => {
+          const el = document.createElement("script");
+          el.textContent = code;
+          document.head.appendChild(el);
+        },
+        args: [scriptText],
+        world: "MAIN",
+      })),
+  ]);
 
-  // Step 2: Fetch and inject Figma capture script
+  // Step 1 shows for exactly 4 seconds
+  await new Promise((r) => setTimeout(r, 4000));
   sendProgress(2);
-  const scriptResp = await fetch(
-    "https://mcp.figma.com/mcp/html-to-design/capture.js"
-  );
-  if (!scriptResp.ok) throw new Error("Failed to fetch Figma capture script");
-  const scriptText = await scriptResp.text();
 
-  await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: (code) => {
-      const el = document.createElement("script");
-      el.textContent = code;
-      document.head.appendChild(el);
-    },
-    args: [scriptText],
-    world: "MAIN",
-  });
+  // Wait for real work to finish (may already be done)
+  const [{ captureId, endpoint }] = await workDone;
 
-  await new Promise((r) => setTimeout(r, 1000));
-
-  // Step 3: Overlay appears the moment captureForDesign is called
-  sendProgress(3);
-  setTimeout(() => { captureState = { active: false, step: 0 }; }, 5000);
-
-  const results = await chrome.scripting.executeScript({
+  // Fire captureForDesign (don't await — it doesn't resolve)
+  chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: (cid, ep) => {
       if (!window.figma || !window.figma.captureForDesign) {
         throw new Error("Figma capture script did not initialize");
       }
-      return window.figma.captureForDesign({
+      window.figma.captureForDesign({
         captureId: cid,
         endpoint: ep,
         selector: "body",
@@ -72,7 +69,9 @@ async function handleCapture(tab) {
     world: "MAIN",
   });
 
-  return { success: true, result: results[0]?.result };
+  // Step 3 immediately in done/checked state
+  sendProgress(3);
+  setTimeout(() => { captureState = { active: false, step: 0 }; }, 5000);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
