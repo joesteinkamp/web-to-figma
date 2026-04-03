@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Purple rounded background -->
+  <rect width="128" height="128" rx="24" fill="#a259ff"/>
+
+  <!-- White F with arrow middle bar -->
+  <g fill="white">
+    <!-- Vertical stroke of F -->
+    <rect x="32" y="24" width="16" height="80" rx="2"/>
+    <!-- Top horizontal bar of F -->
+    <rect x="32" y="24" width="56" height="16" rx="2"/>
+    <!-- Middle bar as chunky arrow pointing right -->
+    <polygon points="48,52 70,52 70,42 92,60 70,78 70,68 48,68"/>
+  </g>
+</svg>
