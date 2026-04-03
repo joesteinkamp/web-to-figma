@@ -27,10 +27,33 @@ async function generateCodeChallenge(verifier) {
   return base64url(hash);
 }
 
-// ─── OAuth (Figma standard endpoints) ───
+// ─── OAuth ───
 
-const FIGMA_AUTH_URL = "https://www.figma.com/oauth";
-const FIGMA_TOKEN_URL = "https://api.figma.com/v1/oauth/token";
+// Try MCP server's own OAuth, fall back to Figma standard
+let authUrl = null;
+let tokenUrl = null;
+
+async function discoverOAuthEndpoints() {
+  if (authUrl && tokenUrl) return;
+
+  try {
+    const resp = await fetch(`${MCP_BASE}/.well-known/oauth-authorization-server`);
+    if (resp.ok) {
+      const metadata = await resp.json();
+      console.log("MCP OAuth metadata:", JSON.stringify(metadata));
+      authUrl = metadata.authorization_endpoint;
+      tokenUrl = metadata.token_endpoint;
+      return;
+    }
+    console.log("MCP OAuth discovery failed:", resp.status);
+  } catch (e) {
+    console.log("MCP OAuth discovery error:", e.message);
+  }
+
+  // Fallback
+  authUrl = "https://www.figma.com/oauth";
+  tokenUrl = "https://api.figma.com/v1/oauth/token";
+}
 
 async function getAccessToken() {
   const stored = await chrome.storage.local.get([
@@ -62,26 +85,28 @@ async function doOAuthFlow() {
     );
   }
 
+  await discoverOAuthEndpoints();
+
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
   const redirectUri = chrome.identity.getRedirectURL();
 
-  const authUrl = new URL(FIGMA_AUTH_URL);
-  authUrl.searchParams.set("client_id", FIGMA_CLIENT_ID);
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("code_challenge", challenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
-  authUrl.searchParams.set("scope", "file_content:read file_metadata:read file_versions:read");
-  authUrl.searchParams.set("state", crypto.randomUUID());
+  const oauthUrl = new URL(authUrl);
+  oauthUrl.searchParams.set("client_id", FIGMA_CLIENT_ID);
+  oauthUrl.searchParams.set("redirect_uri", redirectUri);
+  oauthUrl.searchParams.set("response_type", "code");
+  oauthUrl.searchParams.set("code_challenge", challenge);
+  oauthUrl.searchParams.set("code_challenge_method", "S256");
+  oauthUrl.searchParams.set("scope", "file_content:read file_metadata:read file_versions:read");
+  oauthUrl.searchParams.set("state", crypto.randomUUID());
 
-  console.log("OAuth URL:", authUrl.toString());
+  console.log("OAuth URL:", oauthUrl.toString());
   console.log("Redirect URI:", redirectUri);
 
   let resultUrl;
   try {
     resultUrl = await chrome.identity.launchWebAuthFlow({
-      url: authUrl.toString(),
+      url: oauthUrl.toString(),
       interactive: true,
     });
     console.log("Auth result URL:", resultUrl);
@@ -107,9 +132,9 @@ async function doOAuthFlow() {
     redirect_uri: redirectUri,
     code_verifier: verifier,
   };
-  console.log("Token exchange request to:", FIGMA_TOKEN_URL);
+  console.log("Token exchange request to:", tokenUrl);
 
-  const tokenResp = await fetch(FIGMA_TOKEN_URL, {
+  const tokenResp = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -136,8 +161,9 @@ async function doOAuthFlow() {
 }
 
 async function refreshToken(refreshToken) {
+  await discoverOAuthEndpoints();
   const basicAuth = btoa(`${FIGMA_CLIENT_ID}:${FIGMA_CLIENT_SECRET}`);
-  const resp = await fetch(FIGMA_TOKEN_URL, {
+  const resp = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
