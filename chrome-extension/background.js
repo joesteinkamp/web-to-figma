@@ -1,8 +1,4 @@
-// ─── Configuration ───
-// Register a Figma OAuth app at https://www.figma.com/developers/apps
-// Set redirect URI to: https://<your-extension-id>.chromiumapp.org/
-// Then fill in your client_id below.
-const FIGMA_CLIENT_ID = "YOUR_FIGMA_CLIENT_ID";
+const FIGMA_CLIENT_ID = "sqdN9lM5st0HEGMIWZpIXe";
 
 const MCP_BASE = "https://mcp.figma.com";
 const MCP_URL = `${MCP_BASE}/mcp`;
