@@ -191,16 +191,16 @@ async function mcpRequest(method, params, isNotification = false) {
   const sid = resp.headers.get("mcp-session-id");
   if (sid) mcpSessionId = sid;
 
-  if (resp.status === 401) {
-    // Clear stale token, re-auth on next call
-    await chrome.storage.local.remove(["figmaAccessToken"]);
-    throw new Error("AUTH_EXPIRED");
-  }
-
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
+    console.error(`MCP ${method} failed:`, resp.status, text);
+    if (resp.status === 401) {
+      await chrome.storage.local.remove(["figmaAccessToken"]);
+      throw new Error("AUTH_EXPIRED");
+    }
     throw new Error(`MCP error (${resp.status}): ${text}`);
   }
+  console.log(`MCP ${method}: ${resp.status} OK`);
 
   if (isNotification || resp.status === 202) return null;
 
