@@ -12,17 +12,17 @@
     <div id="progress" style="display:none">
       <div class="step" data-step="1">
         <span class="step-icon">*</span>
-        <span class="step-text">Messaging Claude</span>
+        <span class="step-text">Sending page to Claude Code</span>
         <span class="step-dots"></span>
       </div>
       <div class="step" data-step="2">
         <span class="step-icon">*</span>
-        <span class="step-text">Overlay will appear in top center</span>
+        <span class="step-text">Figma capture overlay loading</span>
         <span class="step-dots"></span>
       </div>
       <div class="step" data-step="3">
         <span class="step-icon">*</span>
-        <span class="step-text">Overlay appeared. Use it.</span>
+        <span class="step-text">Overlay ready — select what to capture</span>
         <span class="step-dots"></span>
       </div>
     </div>
@@ -30,13 +30,67 @@
   </div>
 
   <div id="setupView" style="display:none">
-    <p class="setup-text">One-time setup — paste this in Terminal:</p>
+    <div class="setup-prereqs">
+      <p class="setup-heading">Before you start</p>
+      <p class="setup-detail">This extension requires <strong>Claude Code</strong> and the <strong>Figma MCP server</strong> to be installed and configured. <a href="#" id="setupLearnMore">Learn more</a></p>
+    </div>
+    <p class="setup-text">Run this in your terminal to connect the extension:</p>
     <div class="command-row">
       <code id="setupCommand" class="command"></code>
       <button id="copyBtn" class="copy-btn" title="Copy">Copy</button>
     </div>
     <p class="setup-hint">Then click Retry below.</p>
     <button id="retryBtn">Retry</button>
+  </div>
+
+  <div id="howItWorksView" style="display:none">
+    <a href="#" id="howBackLink" class="back-link">&larr; Back</a>
+
+    <div class="how-section">
+      <p class="how-heading">What this does</p>
+      <p class="how-body">Captures any web page and converts it into an editable Figma design — directly from your browser.</p>
+    </div>
+
+    <div class="how-section">
+      <p class="how-heading">How it works</p>
+      <ol class="how-steps">
+        <li>You click <strong>Capture to Figma</strong> on any page</li>
+        <li>The extension calls <strong>Claude Code</strong> via a local native host</li>
+        <li>Claude Code calls the <strong>Figma MCP server</strong> to start a capture session</li>
+        <li>A Figma overlay appears on the page — select what to capture</li>
+        <li>Figma processes the capture and creates an editable design file</li>
+      </ol>
+    </div>
+
+    <div class="how-section">
+      <p class="how-heading">Requirements</p>
+      <ol class="how-reqs">
+        <li>
+          <strong>Claude Code</strong> — the CLI must be installed and available as <code>claude</code> in your terminal.
+          <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">Install Claude Code &rarr;</a>
+        </li>
+        <li>
+          <strong>Figma MCP server</strong> — must be added to your Claude Code config.
+          Add this to <code>~/.claude/settings.json</code>:
+          <div class="command-row" style="margin-top:6px">
+            <code id="mcpConfig" class="command mcp-config">{
+  "mcpServers": {
+    "figma": {
+      "command": "npx",
+      "args": ["-y", "figma-developer-mcp", "--stdio"]
+    }
+  }
+}</code>
+            <button id="copyMcpBtn" class="copy-btn" title="Copy">Copy</button>
+          </div>
+          <p class="setup-hint" style="margin-top:4px">Then restart Claude Code and follow the Figma auth prompts.</p>
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <div id="footer">
+    <a href="#" id="howItWorksLink">How this works</a>
   </div>
 
   <script src="popup.js"></script>

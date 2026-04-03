@@ -122,6 +122,37 @@ button:disabled {
 
 /* Setup view */
 
+.setup-prereqs {
+  background: #f8f5ff;
+  border: 1px solid #e8dff5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.setup-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+}
+
+.setup-detail {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.setup-detail a {
+  color: #a259ff;
+  text-decoration: none;
+}
+
+.setup-detail a:hover {
+  text-decoration: underline;
+}
+
 .setup-text {
   font-size: 13px;
   color: #555;
@@ -158,4 +189,104 @@ button:disabled {
   font-size: 12px;
   color: #888;
   margin: 0 0 8px;
+}
+
+/* Footer */
+
+#footer {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+  text-align: center;
+}
+
+#footer a {
+  font-size: 12px;
+  color: #888;
+  text-decoration: none;
+}
+
+#footer a:hover {
+  color: #a259ff;
+  text-decoration: underline;
+}
+
+/* How it works view */
+
+.back-link {
+  display: inline-block;
+  font-size: 12px;
+  color: #a259ff;
+  text-decoration: none;
+  margin-bottom: 10px;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.how-section {
+  margin-bottom: 14px;
+}
+
+.how-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+}
+
+.how-body {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.how-steps {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}
+
+.how-steps li {
+  margin-bottom: 2px;
+}
+
+.how-reqs {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.how-reqs li {
+  margin-bottom: 10px;
+}
+
+.how-reqs a {
+  color: #a259ff;
+  text-decoration: none;
+  font-size: 11px;
+}
+
+.how-reqs a:hover {
+  text-decoration: underline;
+}
+
+.how-reqs code {
+  background: #f5f5f5;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.mcp-config {
+  white-space: pre;
+  word-break: normal;
+  font-size: 10px;
+  line-height: 1.4;
 }
