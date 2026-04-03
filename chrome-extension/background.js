@@ -1,5 +1,5 @@
 const FIGMA_CLIENT_ID = "sqdN9lM5st0HEGMIWZpIXe";
-const FIGMA_CLIENT_SECRET = "aONX4unCfggS590GJgakAUzy39/1VA";
+const FIGMA_CLIENT_SECRET = "aONX4unCfggS59OGJgakAUzy39l1VA";
 
 const MCP_BASE = "https://mcp.figma.com";
 const MCP_URL = `${MCP_BASE}/mcp`;
