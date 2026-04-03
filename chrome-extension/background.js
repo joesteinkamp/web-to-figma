@@ -77,38 +77,51 @@ async function doOAuthFlow() {
   console.log("OAuth URL:", authUrl.toString());
   console.log("Redirect URI:", redirectUri);
 
-  const resultUrl = await chrome.identity.launchWebAuthFlow({
-    url: authUrl.toString(),
-    interactive: true,
-  });
+  let resultUrl;
+  try {
+    resultUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: true,
+    });
+    console.log("Auth result URL:", resultUrl);
+  } catch (e) {
+    console.error("launchWebAuthFlow failed:", e);
+    throw e;
+  }
 
   const params = new URL(resultUrl).searchParams;
   const code = params.get("code");
+  console.log("Auth code received:", code ? "yes" : "no", "params:", resultUrl);
   if (!code) {
     throw new Error(
       "No authorization code from Figma: " + (params.get("error") || "unknown")
     );
   }
 
-  // Exchange code for token (PKCE — no client_secret needed)
+  // Exchange code for token
+  const tokenBody = {
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri,
+    client_id: FIGMA_CLIENT_ID,
+    code_verifier: verifier,
+  };
+  console.log("Token exchange request to:", FIGMA_TOKEN_URL);
+
   const tokenResp = await fetch(FIGMA_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-      client_id: FIGMA_CLIENT_ID,
-      code_verifier: verifier,
-    }),
+    body: new URLSearchParams(tokenBody),
   });
 
+  const tokenText = await tokenResp.text();
+  console.log("Token response:", tokenResp.status, tokenText);
+
   if (!tokenResp.ok) {
-    const text = await tokenResp.text().catch(() => "");
-    throw new Error(`Token exchange failed (${tokenResp.status}): ${text}`);
+    throw new Error(`Token exchange failed (${tokenResp.status}): ${tokenText}`);
   }
 
-  const tokens = await tokenResp.json();
+  const tokens = JSON.parse(tokenText);
   await chrome.storage.local.set({
     figmaAccessToken: tokens.access_token,
     figmaRefreshToken: tokens.refresh_token || null,
