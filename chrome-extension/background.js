@@ -26,32 +26,10 @@ async function generateCodeChallenge(verifier) {
   return base64url(hash);
 }
 
-// ─── OAuth ───
+// ─── OAuth (Figma standard endpoints) ───
 
-// Cache the discovered OAuth metadata
-let oauthMetadataCache = null;
-
-async function discoverOAuth() {
-  if (oauthMetadataCache) return oauthMetadataCache;
-
-  // Try MCP server's own OAuth metadata first
-  try {
-    const resp = await fetch(
-      `${MCP_BASE}/.well-known/oauth-authorization-server`
-    );
-    if (resp.ok) {
-      oauthMetadataCache = await resp.json();
-      return oauthMetadataCache;
-    }
-  } catch {}
-
-  // Fallback to Figma's standard OAuth endpoints
-  oauthMetadataCache = {
-    authorization_endpoint: "https://www.figma.com/oauth",
-    token_endpoint: "https://api.figma.com/v1/oauth/token",
-  };
-  return oauthMetadataCache;
-}
+const FIGMA_AUTH_URL = "https://www.figma.com/oauth";
+const FIGMA_TOKEN_URL = "https://api.figma.com/v1/oauth/token";
 
 async function getAccessToken() {
   const stored = await chrome.storage.local.get([
@@ -83,22 +61,21 @@ async function doOAuthFlow() {
     );
   }
 
-  const metadata = await discoverOAuth();
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
   const redirectUri = chrome.identity.getRedirectURL();
 
-  const authUrl = new URL(metadata.authorization_endpoint);
+  const authUrl = new URL(FIGMA_AUTH_URL);
   authUrl.searchParams.set("client_id", FIGMA_CLIENT_ID);
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("code_challenge", challenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
-  authUrl.searchParams.set(
-    "scope",
-    "file_content:read file_dev_resources:write"
-  );
+  authUrl.searchParams.set("scope", "files:read file_content:read");
   authUrl.searchParams.set("state", crypto.randomUUID());
+
+  console.log("OAuth URL:", authUrl.toString());
+  console.log("Redirect URI:", redirectUri);
 
   const resultUrl = await chrome.identity.launchWebAuthFlow({
     url: authUrl.toString(),
@@ -114,7 +91,7 @@ async function doOAuthFlow() {
   }
 
   // Exchange code for token (PKCE — no client_secret needed)
-  const tokenResp = await fetch(metadata.token_endpoint, {
+  const tokenResp = await fetch(FIGMA_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -142,8 +119,7 @@ async function doOAuthFlow() {
 }
 
 async function refreshToken(refreshToken) {
-  const metadata = await discoverOAuth();
-  const resp = await fetch(metadata.token_endpoint, {
+  const resp = await fetch(FIGMA_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
