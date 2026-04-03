@@ -37,7 +37,7 @@ function handleMessage(message) {
   }
 
   const safeTitle = (message.title || "Web Capture").replace(/"/g, '\\"');
-  const prompt = `Call the generate_figma_design tool to create a new capture with title "${safeTitle}". Return ONLY the JSON object containing captureId and endpoint. No other text.`;
+  const prompt = `Call the generate_figma_design tool to create a new capture with title "${safeTitle}". If asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
 
   execFile(
     "claude",
