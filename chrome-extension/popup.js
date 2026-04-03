@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function showSetup() {
     const extId = chrome.runtime.id;
-    setupCommand.textContent = `./native-host/install.sh ${extId}`;
+    setupCommand.textContent = `./install.sh ${extId}`;
     captureView.style.display = "none";
     setupView.style.display = "block";
   }
