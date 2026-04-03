@@ -1,4 +1,5 @@
 const FIGMA_CLIENT_ID = "sqdN9lM5st0HEGMIWZpIXe";
+const FIGMA_CLIENT_SECRET = "aONX4unCfggS590GJgakAUzy39/1VA";
 
 const MCP_BASE = "https://mcp.figma.com";
 const MCP_URL = `${MCP_BASE}/mcp`;
@@ -104,6 +105,7 @@ async function doOAuthFlow() {
     code,
     redirect_uri: redirectUri,
     client_id: FIGMA_CLIENT_ID,
+    client_secret: FIGMA_CLIENT_SECRET,
     code_verifier: verifier,
   };
   console.log("Token exchange request to:", FIGMA_TOKEN_URL);
@@ -139,6 +141,7 @@ async function refreshToken(refreshToken) {
       grant_type: "refresh_token",
       refresh_token: refreshToken,
       client_id: FIGMA_CLIENT_ID,
+      client_secret: FIGMA_CLIENT_SECRET,
     }),
   });
 
