@@ -85,6 +85,25 @@ if [ "$INSTALLED" -eq 0 ]; then
   exit 1
 fi
 
+# macOS: remove quarantine flags from Claude Code and its dependencies
+# When Chrome spawns native messaging hosts, macOS Gatekeeper may block
+# native .node addons that work fine from Terminal
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "Clearing macOS quarantine flags for Claude Code..."
+  CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
+  if [ -f "$CLAUDE_PATH" ]; then
+    CLAUDE_DIR="$(dirname "$CLAUDE_PATH")"
+    xattr -rd com.apple.quarantine "$CLAUDE_DIR" 2>/dev/null || true
+  fi
+  # Clear quarantine on Claude config and MCP server files
+  [ -d "$HOME/.claude" ] && xattr -rd com.apple.quarantine "$HOME/.claude" 2>/dev/null || true
+  # Clear quarantine on common npm/node paths that may have .node addons
+  [ -d "$HOME/.npm" ] && xattr -rd com.apple.quarantine "$HOME/.npm" 2>/dev/null || true
+  [ -d "/usr/local/lib/node_modules" ] && xattr -rd com.apple.quarantine "/usr/local/lib/node_modules" 2>/dev/null || true
+  [ -d "$HOME/.local/lib/node_modules" ] && xattr -rd com.apple.quarantine "$HOME/.local/lib/node_modules" 2>/dev/null || true
+  [ -d "$HOME/.nvm" ] && xattr -rd com.apple.quarantine "$HOME/.nvm" 2>/dev/null || true
+fi
+
 echo ""
 echo "Done! Installed for $INSTALLED browser(s)."
 echo "  Host: $INSTALL_DIR/host.py"
