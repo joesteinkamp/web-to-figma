@@ -91,9 +91,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function addDesignSystemSteps() {
+    // Relabel static steps for DS mode
+    const relabel = { 1: "Connecting to Claude Code", 2: "Connecting to Figma", 3: "Searching design system" };
+    progress.querySelectorAll(".step").forEach((s) => {
+      const n = parseInt(s.dataset.step);
+      if (relabel[n]) s.querySelector(".step-text").textContent = relabel[n];
+    });
     const dsSteps = [
-      { step: 4, text: "Searching design system" },
-      { step: 5, text: "Building with components" },
+      { step: 4, text: "Building with components" },
+      { step: 5, text: "Finalizing design" },
       { step: 6, text: "Design ready in Figma" },
     ];
     dsSteps.forEach(({ step, text }) => {
