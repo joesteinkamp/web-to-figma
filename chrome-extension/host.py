@@ -91,20 +91,28 @@ def main():
 
         if use_design_system and file_url:
             prompt = (
-                f'Capture the web page titled "{title}" using design system components. '
-                "Follow this workflow:\n"
-                f'1. Call generate_figma_design with title "{title}" and pass the file_url parameter '
-                f'set to "{file_url}" so the capture goes into that existing file.\n'
-                "2. Use search_design_system to find matching components, variables, and styles "
-                "in the file's libraries. Search for common UI elements: buttons, inputs, cards, "
-                "navigation, headers, footers, icons, avatars, toggles, tags, etc.\n"
-                "3. Use use_figma to create a new frame in the file that rebuilds the page layout "
-                "using real component instances, variable bindings for colors and spacing, and "
-                "proper auto layout structure. Work section by section.\n"
-                "4. Delete the flat capture reference frame when the component-based version is complete.\n"
+                f'You MUST complete ALL of the following steps in order. Do not stop after step 1.\n\n'
+                f'Step 1: Call generate_figma_design with title "{title}" and pass the file_url parameter '
+                f'set to "{file_url}". Save the captureId and endpoint from the response.\n\n'
+                f'Step 2: Call search_design_system to find components in the file\'s design system libraries. '
+                f'Pass the file URL "{file_url}" as context. Run multiple searches with different terms: '
+                '"button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". '
+                "Record the component keys, variable keys, and style keys you find.\n\n"
+                "Step 3: Call use_figma to build a new page in the file that recreates the captured page "
+                "using the real design system components found in step 2. You MUST:\n"
+                f'- Pass the file URL "{file_url}" to use_figma\n'
+                "- Import components using figma.importComponentSetByKeyAsync(key)\n"
+                "- Create instances using component.createInstance()\n"
+                "- Import variables using figma.variables.importVariableByKeyAsync(key)\n"
+                "- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n"
+                "- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n"
+                "- Work section by section, one use_figma call per section\n"
+                "- Return all created node IDs from each call\n\n"
+                "Step 4: After building all sections with components, delete the original flat capture frame.\n\n"
+                "After completing ALL four steps, return the captureId and endpoint from step 1 as JSON: "
+                '{"captureId": "...", "endpoint": "..."}\n\n'
                 "If asked to choose an organization or team, select the first one available. "
-                "Do not ask for confirmation or clarification. Do not open any URLs in a browser. "
-                "Return ONLY the JSON object containing captureId and endpoint from step 1. No other text."
+                "Do not ask for confirmation or clarification. Do not open any URLs in a browser."
             )
             allowed_tools = (
                 "mcp__figma__generate_figma_design,"
