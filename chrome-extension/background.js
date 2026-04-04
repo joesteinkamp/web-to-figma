@@ -1,9 +1,10 @@
 const NATIVE_HOST = "com.web_to_figma.capture";
 
 let captureState = { active: false, step: 0 };
+let totalSteps = 3;
 
 function sendProgress(step, error) {
-  captureState = { active: !error && step < 3, step, error: error || null };
+  captureState = { active: !error && step < totalSteps, step, error: error || null };
   chrome.runtime.sendMessage({ action: "capture-progress", step, error: error || null }).catch(() => {});
 }
 
@@ -23,14 +24,21 @@ function callNativeHost(message) {
   });
 }
 
-async function handleCapture(tab) {
+async function handleCapture(tab, options = {}) {
+  const dsMode = options.useDesignSystem || false;
+  totalSteps = dsMode ? 6 : 3;
+
   // All real work starts immediately in parallel
   sendProgress(1);
+  const hostMsg = {
+    action: "generate-capture",
+    title: tab.title || "Web Capture",
+  };
+  if (options.fileUrl) hostMsg.fileUrl = options.fileUrl;
+  if (dsMode) hostMsg.useDesignSystem = true;
+
   const workDone = Promise.all([
-    callNativeHost({
-      action: "generate-capture",
-      title: tab.title || "Web Capture",
-    }),
+    callNativeHost(hostMsg),
     fetch("https://mcp.figma.com/mcp/html-to-design/capture.js")
       .then((r) => { if (!r.ok) throw new Error("Failed to fetch Figma capture script"); return r.text(); })
       .then((scriptText) => chrome.scripting.executeScript({
@@ -69,9 +77,20 @@ async function handleCapture(tab) {
     world: "MAIN",
   });
 
-  // Step 3 immediately in done/checked state
-  sendProgress(3);
-  setTimeout(() => { captureState = { active: false, step: 0 }; }, 5000);
+  if (dsMode) {
+    // DS mode: steps 3-6 are time-based estimates while the agent works
+    sendProgress(3);
+    await new Promise((r) => setTimeout(r, 5000));
+    sendProgress(4);
+    await new Promise((r) => setTimeout(r, 15000));
+    sendProgress(5);
+    await new Promise((r) => setTimeout(r, 30000));
+    sendProgress(6);
+  } else {
+    sendProgress(3);
+  }
+
+  setTimeout(() => { captureState = { active: false, step: 0 }; totalSteps = 3; }, 5000);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -89,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           currentWindow: true,
         });
         if (!tab) throw new Error("No active tab found");
-        await handleCapture(tab);
+        await handleCapture(tab, { fileUrl: message.fileUrl, useDesignSystem: message.useDesignSystem });
       } catch (err) {
         sendProgress(0, err.message);
       }

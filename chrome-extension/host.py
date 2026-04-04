@@ -77,20 +77,61 @@ def main():
             return
 
         title = message.get("title", "Web Capture").replace('"', '\\"')
-        prompt = (
-            f'Call the generate_figma_design tool to create a new capture with title "{title}". '
-            "If asked to choose an organization or team, select the first one available. "
-            "Do not ask for confirmation or clarification. "
-            "Return ONLY the JSON object containing captureId and endpoint. No other text."
-        )
+        file_url = message.get("fileUrl", "")
+        use_design_system = message.get("useDesignSystem", False)
 
-        logging.info("Running: %s -p ...", claude)
+        if use_design_system and file_url:
+            prompt = (
+                f'Capture the web page titled "{title}" into the Figma file at {file_url} '
+                "using design system components. Follow this workflow:\n"
+                "1. Call generate_figma_design to capture the page into the file as a flat reference.\n"
+                "2. Use search_design_system to find matching components, variables, and styles "
+                "in the file's libraries. Search for common UI elements: buttons, inputs, cards, "
+                "navigation, headers, footers, icons, avatars, toggles, tags, etc.\n"
+                "3. Use use_figma to create a new frame in the file that rebuilds the page layout "
+                "using real component instances, variable bindings for colors and spacing, and "
+                "proper auto layout structure. Work section by section.\n"
+                "4. Delete the flat capture reference frame when the component-based version is complete.\n"
+                "If asked to choose an organization or team, select the first one available. "
+                "Do not ask for confirmation or clarification. "
+                "Return ONLY the JSON object containing captureId and endpoint. No other text."
+            )
+            allowed_tools = (
+                "mcp__figma__generate_figma_design,"
+                "mcp__figma__get_metadata,"
+                "mcp__figma__use_figma,"
+                "mcp__figma__search_design_system,"
+                "mcp__figma__get_screenshot,"
+                "mcp__figma__get_variable_defs"
+            )
+            timeout = 300
+        elif file_url:
+            prompt = (
+                f'Call the generate_figma_design tool to capture with title "{title}" '
+                f'into the existing Figma file at {file_url}. '
+                "If asked to choose an organization or team, select the first one available. "
+                "Do not ask for confirmation or clarification. "
+                "Return ONLY the JSON object containing captureId and endpoint. No other text."
+            )
+            allowed_tools = "mcp__figma__generate_figma_design,mcp__figma__get_metadata"
+            timeout = 90
+        else:
+            prompt = (
+                f'Call the generate_figma_design tool to create a new capture with title "{title}". '
+                "If asked to choose an organization or team, select the first one available. "
+                "Do not ask for confirmation or clarification. "
+                "Return ONLY the JSON object containing captureId and endpoint. No other text."
+            )
+            allowed_tools = "mcp__figma__generate_figma_design,mcp__figma__get_metadata"
+            timeout = 90
+
+        logging.info("Running: %s -p ... (ds=%s, timeout=%s)", claude, use_design_system, timeout)
         result = subprocess.run(
-            [claude, "-p", prompt, "--output-format", "json", "--allowedTools", "mcp__figma__generate_figma_design,mcp__figma__get_metadata"],
+            [claude, "-p", prompt, "--output-format", "json", "--allowedTools", allowed_tools],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
-            timeout=90,
+            timeout=timeout,
         )
         logging.info("Claude exit code: %s", result.returncode)
         logging.debug("Claude stdout: %.500s", result.stdout)
@@ -114,7 +155,7 @@ def main():
 
     except subprocess.TimeoutExpired:
         logging.error("Timed out waiting for Claude")
-        send_message({"error": "Timed out (90s). Try again."})
+        send_message({"error": "Timed out. Try again."})
     except Exception as e:
         logging.exception("Host error")
         send_message({"error": f"Host error: {str(e)}"})

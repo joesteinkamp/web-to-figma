@@ -50,6 +50,53 @@ button:disabled {
   color: #d32f2f;
 }
 
+/* Capture options */
+
+#captureOptions {
+  margin-bottom: 12px;
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+}
+
+.option-row input[type="checkbox"] {
+  margin: 0;
+  accent-color: #a259ff;
+}
+
+#fileUrlGroup {
+  margin: 8px 0 0 22px;
+}
+
+#fileUrlInput {
+  width: 100%;
+  padding: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  box-sizing: border-box;
+  outline: none;
+}
+
+#fileUrlInput:focus {
+  border-color: #a259ff;
+}
+
+#fileUrlInput::placeholder {
+  color: #aaa;
+}
+
+.sub-option {
+  margin-top: 8px;
+}
+
 /* Progress steps */
 
 #progress {

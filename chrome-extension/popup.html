@@ -8,6 +8,19 @@
   <h1>Web to Figma</h1>
 
   <div id="captureView">
+    <div id="captureOptions">
+      <label class="option-row">
+        <input type="checkbox" id="saveToExisting">
+        <span>Save to existing file</span>
+      </label>
+      <div id="fileUrlGroup" style="display:none">
+        <input type="text" id="fileUrlInput" placeholder="Paste Figma file URL">
+        <label class="option-row sub-option" id="dsOptionRow" style="display:none">
+          <input type="checkbox" id="useDesignSystem">
+          <span>Use design system components</span>
+        </label>
+      </div>
+    </div>
     <button id="captureBtn">Capture to Figma</button>
     <div id="progress" style="display:none">
       <div class="step" data-step="1">
