@@ -32,22 +32,45 @@ def clear_quarantine():
     when spawned from Chrome's native messaging host."""
     if sys.platform != "darwin":
         return
-    paths = [
-        os.path.expanduser("~/.claude"),
-        os.path.expanduser("~/.local/bin"),
-        os.path.expanduser("~/.local/lib/node_modules"),
-        os.path.expanduser("~/.npm"),
-        os.path.expanduser("~/.nvm"),
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            try:
+    try:
+        # Find the real claude binary and clear its entire installation tree
+        claude = find_claude()
+        if claude:
+            real_path = os.path.realpath(claude)
+            # Walk up to find the package root (e.g. node_modules/@anthropic-ai/...)
+            pkg_dir = os.path.dirname(real_path)
+            # Clear quarantine on the binary's directory and parent
+            for _ in range(3):
                 subprocess.run(
-                    ["xattr", "-rd", "com.apple.quarantine", p],
+                    ["xattr", "-rd", "com.apple.quarantine", pkg_dir],
                     capture_output=True, timeout=10,
                 )
-            except Exception:
-                pass
+                pkg_dir = os.path.dirname(pkg_dir)
+
+        # Clear known paths
+        paths = [
+            os.path.expanduser("~/.claude"),
+            os.path.expanduser("~/.local"),
+            os.path.expanduser("~/.npm"),
+            os.path.expanduser("~/.nvm"),
+            os.path.expanduser("~/.cache"),
+        ]
+        for p in paths:
+            if os.path.exists(p):
+                subprocess.run(
+                    ["xattr", "-rd", "com.apple.quarantine", p],
+                    capture_output=True, timeout=15,
+                )
+
+        # Find and clear any .node files system-wide in user directories
+        subprocess.run(
+            ["find", os.path.expanduser("~"), "-maxdepth", "6",
+             "-name", "*.node", "-exec",
+             "xattr", "-d", "com.apple.quarantine", "{}", ";"],
+            capture_output=True, timeout=30,
+        )
+    except Exception:
+        pass
 
 def find_claude():
     """Find claude CLI in common locations."""
