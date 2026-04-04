@@ -90,18 +90,19 @@ fi
 # native .node addons that work fine from Terminal
 if [[ "$OSTYPE" == "darwin"* ]]; then
   echo "Clearing macOS quarantine flags for Claude Code..."
+  # Clear the claude binary's entire installation tree
   CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
   if [ -f "$CLAUDE_PATH" ]; then
-    CLAUDE_DIR="$(dirname "$CLAUDE_PATH")"
-    xattr -rd com.apple.quarantine "$CLAUDE_DIR" 2>/dev/null || true
+    REAL_PATH=$(readlink -f "$CLAUDE_PATH" 2>/dev/null || realpath "$CLAUDE_PATH" 2>/dev/null || echo "$CLAUDE_PATH")
+    xattr -rd com.apple.quarantine "$(dirname "$REAL_PATH")" 2>/dev/null || true
   fi
-  # Clear quarantine on Claude config and MCP server files
-  [ -d "$HOME/.claude" ] && xattr -rd com.apple.quarantine "$HOME/.claude" 2>/dev/null || true
-  # Clear quarantine on common npm/node paths that may have .node addons
-  [ -d "$HOME/.npm" ] && xattr -rd com.apple.quarantine "$HOME/.npm" 2>/dev/null || true
-  [ -d "/usr/local/lib/node_modules" ] && xattr -rd com.apple.quarantine "/usr/local/lib/node_modules" 2>/dev/null || true
-  [ -d "$HOME/.local/lib/node_modules" ] && xattr -rd com.apple.quarantine "$HOME/.local/lib/node_modules" 2>/dev/null || true
-  [ -d "$HOME/.nvm" ] && xattr -rd com.apple.quarantine "$HOME/.nvm" 2>/dev/null || true
+  # Clear broad paths that may contain native .node addons
+  for DIR in "$HOME/.claude" "$HOME/.local" "$HOME/.npm" "$HOME/.nvm" "$HOME/.cache" "/usr/local/lib/node_modules"; do
+    [ -d "$DIR" ] && xattr -rd com.apple.quarantine "$DIR" 2>/dev/null || true
+  done
+  # Find and clear any .node files in user home
+  echo "Clearing quarantine on native Node.js addons..."
+  find "$HOME" -maxdepth 6 -name "*.node" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
 fi
 
 echo ""
