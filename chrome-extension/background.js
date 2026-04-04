@@ -53,40 +53,65 @@ async function handleCapture(tab, options = {}) {
       })),
   ]);
 
-  // Step 1 shows for exactly 4 seconds
-  await new Promise((r) => setTimeout(r, 4000));
-  sendProgress(2);
-
-  // Wait for real work to finish (may already be done)
-  const [{ captureId, endpoint }] = await workDone;
-
-  // Fire captureForDesign (don't await — it doesn't resolve)
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: (cid, ep) => {
-      if (!window.figma || !window.figma.captureForDesign) {
-        throw new Error("Figma capture script did not initialize");
-      }
-      window.figma.captureForDesign({
-        captureId: cid,
-        endpoint: ep,
-        selector: "body",
-      });
-    },
-    args: [captureId, endpoint],
-    world: "MAIN",
-  });
-
   if (dsMode) {
-    // DS mode: steps 3-6 are time-based estimates while the agent works
-    sendProgress(3);
-    await new Promise((r) => setTimeout(r, 5000));
-    sendProgress(4);
-    await new Promise((r) => setTimeout(r, 15000));
-    sendProgress(5);
-    await new Promise((r) => setTimeout(r, 30000));
-    sendProgress(6);
+    // DS mode: run time-based progress steps in parallel with native host work
+    // The native host does all 4 steps in one call, so we show estimated progress
+    const progressTimer = (async () => {
+      await new Promise((r) => setTimeout(r, 4000));
+      sendProgress(2); // "Figma capture overlay loading"
+      await new Promise((r) => setTimeout(r, 8000));
+      sendProgress(3); // "Overlay ready"
+      await new Promise((r) => setTimeout(r, 10000));
+      sendProgress(4); // "Searching design system"
+      await new Promise((r) => setTimeout(r, 30000));
+      sendProgress(5); // "Building with components"
+    })();
+
+    // Wait for the native host to finish all steps
+    const [{ captureId, endpoint }] = await workDone;
+
+    // Fire captureForDesign
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (cid, ep) => {
+        if (!window.figma || !window.figma.captureForDesign) {
+          throw new Error("Figma capture script did not initialize");
+        }
+        window.figma.captureForDesign({
+          captureId: cid,
+          endpoint: ep,
+          selector: "body",
+        });
+      },
+      args: [captureId, endpoint],
+      world: "MAIN",
+    });
+
+    // Jump to final step once work is actually done
+    sendProgress(6); // "Design ready in Figma"
   } else {
+    // Standard mode: original timing
+    await new Promise((r) => setTimeout(r, 4000));
+    sendProgress(2);
+
+    const [{ captureId, endpoint }] = await workDone;
+
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (cid, ep) => {
+        if (!window.figma || !window.figma.captureForDesign) {
+          throw new Error("Figma capture script did not initialize");
+        }
+        window.figma.captureForDesign({
+          captureId: cid,
+          endpoint: ep,
+          selector: "body",
+        });
+      },
+      args: [captureId, endpoint],
+      world: "MAIN",
+    });
+
     sendProgress(3);
   }
 
