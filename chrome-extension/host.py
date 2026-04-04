@@ -52,6 +52,15 @@ def extract_config(text):
             pass
     cid = re.search(r'captureId["\'\s:]+([a-zA-Z0-9_-]+)', text)
     ep = re.search(r'endpoint["\'\s:]+(https?://[^\s"\']+)', text)
+    if cid and ep:
+        return {"captureId": cid.group(1), "endpoint": ep.group(1)}
+    # Fallback: extract from figmacapture URL format
+    # e.g. #figmacapture=UUID&figmaendpoint=URL_ENCODED
+    fc = re.search(r'figmacapture=([a-zA-Z0-9_-]+)', text)
+    fe = re.search(r'figmaendpoint=(https?[^\s&"\']+)', text)
+    if fc and fe:
+        from urllib.parse import unquote
+        return {"captureId": fc.group(1), "endpoint": unquote(fe.group(1))}
     return {
         "captureId": cid.group(1) if cid else None,
         "endpoint": ep.group(1) if ep else None,
@@ -94,8 +103,8 @@ def main():
                 "proper auto layout structure. Work section by section.\n"
                 "4. Delete the flat capture reference frame when the component-based version is complete.\n"
                 "If asked to choose an organization or team, select the first one available. "
-                "Do not ask for confirmation or clarification. "
-                "Return ONLY the JSON object containing captureId and endpoint. No other text."
+                "Do not ask for confirmation or clarification. Do not open any URLs in a browser. "
+                "Return ONLY the JSON object containing captureId and endpoint from step 1. No other text."
             )
             allowed_tools = (
                 "mcp__figma__generate_figma_design,"
