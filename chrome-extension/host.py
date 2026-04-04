@@ -27,50 +27,49 @@ def send_message(msg):
     sys.stdout.buffer.write(encoded)
     sys.stdout.buffer.flush()
 
-def clear_quarantine():
-    """On macOS, remove quarantine flags that block native .node addons
-    when spawned from Chrome's native messaging host."""
+def clear_node_quarantine():
+    """Clear macOS quarantine from .node files in the system temp dir.
+    Returns True if any files were cleared."""
     if sys.platform != "darwin":
-        return
-    try:
-        # Find the real claude binary and clear its entire installation tree
-        claude = find_claude()
-        if claude:
-            real_path = os.path.realpath(claude)
-            # Walk up to find the package root (e.g. node_modules/@anthropic-ai/...)
-            pkg_dir = os.path.dirname(real_path)
-            # Clear quarantine on the binary's directory and parent
-            for _ in range(3):
+        return False
+    import tempfile, glob
+    tmpdir = tempfile.gettempdir()
+    cleared = False
+    for f in glob.glob(os.path.join(tmpdir, ".*.node")):
+        try:
+            result = subprocess.run(
+                ["xattr", "-l", f], capture_output=True, text=True, timeout=5,
+            )
+            if "com.apple.quarantine" in result.stdout:
                 subprocess.run(
-                    ["xattr", "-rd", "com.apple.quarantine", pkg_dir],
-                    capture_output=True, timeout=10,
+                    ["xattr", "-d", "com.apple.quarantine", f],
+                    capture_output=True, timeout=5,
                 )
-                pkg_dir = os.path.dirname(pkg_dir)
+                cleared = True
+                logging.info("Cleared quarantine from %s", f)
+        except Exception:
+            pass
+    return cleared
 
-        # Clear known paths
-        paths = [
-            os.path.expanduser("~/.claude"),
-            os.path.expanduser("~/.local"),
-            os.path.expanduser("~/.npm"),
-            os.path.expanduser("~/.nvm"),
-            os.path.expanduser("~/.cache"),
-        ]
-        for p in paths:
-            if os.path.exists(p):
-                subprocess.run(
-                    ["xattr", "-rd", "com.apple.quarantine", p],
-                    capture_output=True, timeout=15,
-                )
-
-        # Find and clear any .node files system-wide in user directories
-        subprocess.run(
-            ["find", os.path.expanduser("~"), "-maxdepth", "6",
-             "-name", "*.node", "-exec",
-             "xattr", "-d", "com.apple.quarantine", "{}", ";"],
-            capture_output=True, timeout=30,
-        )
-    except Exception:
-        pass
+def load_skills_context():
+    """Load Figma skill reference docs for design system mode."""
+    skills_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skills")
+    files = [
+        "figma-use/SKILL.md",
+        "figma-generate-design/SKILL.md",
+        "figma-use/references/gotchas.md",
+        "figma-use/references/common-patterns.md",
+        "figma-use/references/variable-patterns.md",
+        "figma-use/references/component-patterns.md",
+        "figma-use/references/validation-and-recovery.md",
+    ]
+    parts = []
+    for f in files:
+        path = os.path.join(skills_dir, f)
+        if os.path.isfile(path):
+            with open(path) as fh:
+                parts.append(f"--- {f} ---\n{fh.read()}")
+    return "\n\n".join(parts)
 
 def find_claude():
     """Find claude CLI in common locations."""
@@ -114,7 +113,6 @@ def extract_config(text):
 def main():
     try:
         logging.info("Host started")
-        clear_quarantine()
         message = read_message()
         logging.info("Message received: %s", message)
         if not message:
@@ -137,34 +135,27 @@ def main():
 
         if use_design_system and file_url:
             prompt = (
-                f'Build a design in the Figma file at "{file_url}" that recreates the web page titled "{title}" '
-                "using real design system components. Complete ALL steps.\n\n"
-                "Step 1: Call search_design_system to find components in the file's design system libraries. "
-                f'Run multiple searches with different terms: '
-                '"button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". '
-                "Record the component keys, variable keys, and style keys you find.\n\n"
-                "Step 2: Call use_figma to build a page in the file that recreates the web page layout "
-                "using the real design system components found in step 1. You MUST:\n"
-                f'- Pass the file URL "{file_url}" to use_figma\n'
-                "- Import components using figma.importComponentSetByKeyAsync(key)\n"
-                "- Create instances using component.createInstance()\n"
-                "- Import variables using figma.variables.importVariableByKeyAsync(key)\n"
-                "- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n"
-                "- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n"
-                "- Work section by section, one use_figma call per section\n"
-                "- Return all created node IDs from each call\n\n"
-                'After completing all steps, return {"status": "complete"}.\n\n'
-                "If asked to choose an organization or team, select the first one available. "
-                "Do not ask for confirmation or clarification. Do not open any URLs in a browser."
+                f'Build a simple layout in the Figma file at "{file_url}" inspired by '
+                f'the web page titled "{title}".\n\n'
+                "Do this in exactly 3 steps, no more:\n"
+                "1. Call search_design_system once with query \"button card input nav\" "
+                "to find available components. Note the component keys.\n"
+                "2. Call use_figma once to create a frame and add instances of the most "
+                "relevant components found. Import components by key using "
+                "figma.importComponentSetByKeyAsync(key), create instances, and arrange "
+                "them in a vertical auto-layout frame. Return all created node IDs.\n"
+                "3. Return {\"status\": \"complete\"} when done.\n\n"
+                "Keep it simple — just demonstrate using the design system components. "
+                "Do not search multiple times. Do not validate with screenshots. "
+                "Do not ask for confirmation. Do not open URLs in a browser. "
+                "If asked to choose an organization or team, select the first one available."
             )
             allowed_tools = (
                 "mcp__figma__use_figma,"
-                "mcp__figma__search_design_system,"
-                "mcp__figma__get_metadata,"
-                "mcp__figma__get_screenshot,"
-                "mcp__figma__get_variable_defs"
+                "mcp__figma__search_design_system"
             )
-            timeout = 300
+            system_context = load_skills_context()
+            timeout = 120
         elif file_url:
             prompt = (
                 f'Call the generate_figma_design tool with title "{title}" '
@@ -187,13 +178,36 @@ def main():
             timeout = 90
 
         logging.info("Running: %s -p ... (ds=%s, timeout=%s)", claude, use_design_system, timeout)
+        cmd = [
+            claude, "-p", prompt,
+            "--output-format", "json",
+            "--allowedTools", allowed_tools,
+            "--disallowedTools", "Bash,Read,Write,Edit,Glob,Grep,Agent",
+        ]
+        if use_design_system and system_context:
+            cmd += ["--append-system-prompt", system_context]
+
+        # Clear any quarantined .node files before running Claude
+        clear_node_quarantine()
+
         result = subprocess.run(
-            [claude, "-p", prompt, "--output-format", "json", "--allowedTools", allowed_tools],
+            cmd,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=timeout,
         )
+
+        # If Claude failed and there are newly quarantined .node files, clear and retry
+        if result.returncode != 0 and clear_node_quarantine():
+            logging.info("Retrying after clearing quarantine from .node files")
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
         logging.info("Claude exit code: %s", result.returncode)
         logging.debug("Claude stdout: %.500s", result.stdout)
         if result.stderr:
