@@ -21,9 +21,10 @@ if [ -z "$EXT_ID" ]; then
   exit 1
 fi
 
-# Verify python3 exists
-if ! command -v python3 &>/dev/null; then
-  echo "Error: python3 not found."
+# Verify python3 exists (check common locations)
+if ! command -v python3 &>/dev/null && [ ! -x /opt/homebrew/bin/python3 ] && [ ! -x /usr/local/bin/python3 ]; then
+  echo "Error: python3 not found. Install via: xcode-select --install"
+  echo "  or: brew install python3"
   exit 1
 fi
 
