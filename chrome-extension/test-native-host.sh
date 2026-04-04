@@ -43,7 +43,7 @@ fi
 
 if [ -f "$MANIFEST" ]; then
   echo "   ✓ Manifest exists"
-  MANIFEST_PATH=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$MANIFEST','utf8')).path)")
+  MANIFEST_PATH=$(python3 -c "import json; print(json.load(open('$MANIFEST'))['path'])")
   echo "   Path in manifest: $MANIFEST_PATH"
   if [ -x "$MANIFEST_PATH" ]; then
     echo "   ✓ Path is executable"
@@ -71,29 +71,30 @@ fi
 # 4. Test: send a properly formatted native messaging message
 echo ""
 echo "4. Sending test message in native messaging format..."
-RESPONSE=$(node -e "
-const { execFileSync } = require('child_process');
-const msg = Buffer.from(JSON.stringify({action: 'test-echo'}));
-const header = Buffer.alloc(4);
-header.writeUInt32LE(msg.length, 0);
-const stdin = Buffer.concat([header, msg]);
+RESPONSE=$(python3 -c "
+import struct, sys, subprocess, json
 
-const result = require('child_process').spawnSync('$WRAPPER', [], {
-  input: stdin,
-  timeout: 10000
-});
+msg = json.dumps({'action': 'test-echo'}).encode()
+stdin_data = struct.pack('<I', len(msg)) + msg
 
-const stdout = result.stdout;
-const stderr = result.stderr ? result.stderr.toString() : '';
+proc = subprocess.run(
+    ['$WRAPPER'],
+    input=stdin_data,
+    capture_output=True,
+    timeout=10
+)
 
-if (stdout && stdout.length >= 4) {
-  const respLen = stdout.readUInt32LE(0);
-  const respBody = stdout.slice(4, 4 + respLen).toString();
-  console.log('OK: ' + respBody);
-} else {
-  console.log('NO RESPONSE (exit code: ' + result.status + ')');
-  if (stderr) console.log('STDERR: ' + stderr);
-}
+stdout = proc.stdout
+stderr = proc.stderr.decode() if proc.stderr else ''
+
+if len(stdout) >= 4:
+    resp_len = struct.unpack('<I', stdout[:4])[0]
+    resp_body = stdout[4:4+resp_len].decode()
+    print(f'OK: {resp_body}')
+else:
+    print(f'NO RESPONSE (exit code: {proc.returncode})')
+    if stderr:
+        print(f'STDERR: {stderr}')
 " 2>&1)
 
 echo "   $RESPONSE"
@@ -106,28 +107,30 @@ echo ""
 
 if [ "$1" = "--full" ]; then
   echo "   Sending generate-capture message..."
-  RESPONSE=$(node -e "
-const msg = Buffer.from(JSON.stringify({action: 'generate-capture', title: 'Test Capture'}));
-const header = Buffer.alloc(4);
-header.writeUInt32LE(msg.length, 0);
-const stdin = Buffer.concat([header, msg]);
+  RESPONSE=$(python3 -c "
+import struct, sys, subprocess, json
 
-const result = require('child_process').spawnSync('$WRAPPER', [], {
-  input: stdin,
-  timeout: 90000
-});
+msg = json.dumps({'action': 'generate-capture', 'title': 'Test Capture'}).encode()
+stdin_data = struct.pack('<I', len(msg)) + msg
 
-const stdout = result.stdout;
-const stderr = result.stderr ? result.stderr.toString() : '';
+proc = subprocess.run(
+    ['$WRAPPER'],
+    input=stdin_data,
+    capture_output=True,
+    timeout=90
+)
 
-if (stdout && stdout.length >= 4) {
-  const respLen = stdout.readUInt32LE(0);
-  const respBody = stdout.slice(4, 4 + respLen).toString();
-  console.log('Response: ' + respBody);
-} else {
-  console.log('NO RESPONSE (exit code: ' + result.status + ')');
-  if (stderr) console.log('STDERR: ' + stderr);
-}
+stdout = proc.stdout
+stderr = proc.stderr.decode() if proc.stderr else ''
+
+if len(stdout) >= 4:
+    resp_len = struct.unpack('<I', stdout[:4])[0]
+    resp_body = stdout[4:4+resp_len].decode()
+    print(f'Response: {resp_body}')
+else:
+    print(f'NO RESPONSE (exit code: {proc.returncode})')
+    if stderr:
+        print(f'STDERR: {stderr}')
 " 2>&1)
   echo "   $RESPONSE"
 fi
