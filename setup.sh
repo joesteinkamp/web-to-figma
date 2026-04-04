@@ -6,7 +6,7 @@ set -e
 
 HOST_NAME="com.web_to_figma.capture"
 INSTALL_DIR="$HOME/.web-to-figma"
-HOST_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/chrome-extension/host.py"
+BASE_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/chrome-extension"
 
 # Get extension ID
 EXT_ID="${1:-}"
@@ -16,24 +16,43 @@ if [ -z "$EXT_ID" ]; then
   exit 1
 fi
 
-# Verify python3
-if ! command -v python3 &>/dev/null; then
-  echo "Error: python3 not found."
+# Verify node exists (required by Claude Code CLI)
+if ! command -v node &>/dev/null; then
+  echo "Error: node not found. Install Node.js from https://nodejs.org"
   exit 1
 fi
 
-# Download host script
+# Download host files
 mkdir -p "$INSTALL_DIR"
 echo "Downloading native host..."
-curl -fsSL "$HOST_URL" -o "$INSTALL_DIR/host.py"
-chmod +x "$INSTALL_DIR/host.py"
+curl -fsSL "$BASE_URL/host.js" -o "$INSTALL_DIR/host.js"
+curl -fsSL "$BASE_URL/host-wrapper.sh" -o "$INSTALL_DIR/host-wrapper.sh"
+chmod +x "$INSTALL_DIR/host.js" "$INSTALL_DIR/host-wrapper.sh"
+
+# Download skill reference docs (used for design system mode)
+SKILLS_FILES=(
+  "skills/figma-use/SKILL.md"
+  "skills/figma-generate-design/SKILL.md"
+  "skills/figma-use/references/gotchas.md"
+  "skills/figma-use/references/common-patterns.md"
+  "skills/figma-use/references/variable-patterns.md"
+  "skills/figma-use/references/component-patterns.md"
+  "skills/figma-use/references/validation-and-recovery.md"
+)
+
+echo "Downloading skill references..."
+for SKILL_FILE in "${SKILLS_FILES[@]}"; do
+  DEST="$INSTALL_DIR/$SKILL_FILE"
+  mkdir -p "$(dirname "$DEST")"
+  curl -fsSL "$BASE_URL/$SKILL_FILE" -o "$DEST" 2>/dev/null || true
+done
 
 # Build manifest
 MANIFEST=$(cat <<EOF
 {
   "name": "$HOST_NAME",
   "description": "Web to Figma — invokes Claude Code for Figma capture",
-  "path": "$INSTALL_DIR/host.py",
+  "path": "$INSTALL_DIR/host-wrapper.sh",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://$EXT_ID/"
@@ -107,6 +126,6 @@ fi
 
 echo ""
 echo "Done! Installed for $INSTALLED browser(s)."
-echo "  Host: $INSTALL_DIR/host.py"
+echo "  Host: $INSTALL_DIR/host-wrapper.sh"
 echo ""
 echo "Reload the extension and click Capture to Figma."

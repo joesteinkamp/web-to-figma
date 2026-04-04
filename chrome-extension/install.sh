@@ -21,9 +21,9 @@ if [ -z "$EXT_ID" ]; then
   exit 1
 fi
 
-# Verify python3 exists
-if ! command -v python3 &>/dev/null; then
-  echo "Error: python3 not found."
+# Verify node exists (required by Claude Code CLI)
+if ! command -v node &>/dev/null; then
+  echo "Error: node not found. Install Node.js from https://nodejs.org"
   exit 1
 fi
 
