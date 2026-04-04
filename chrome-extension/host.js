@@ -45,8 +45,8 @@ function handleMessage(message) {
   let timeout = 60000;
 
   if (useDesignSystem && fileUrl) {
-    prompt = `You MUST complete ALL of the following steps in order. Do not stop after step 1.\n\nStep 1: Call generate_figma_design with title "${safeTitle}" and pass the file_url parameter set to "${fileUrl}". Save the captureId and endpoint from the response.\n\nStep 2: Call search_design_system to find components in the file's design system libraries. Pass the file URL "${fileUrl}" as context. Run multiple searches with different terms: "button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". Record the component keys, variable keys, and style keys you find.\n\nStep 3: Call use_figma to build a new page in the file that recreates the captured page using the real design system components found in step 2. You MUST:\n- Pass the file URL "${fileUrl}" to use_figma\n- Import components using figma.importComponentSetByKeyAsync(key)\n- Create instances using component.createInstance()\n- Import variables using figma.variables.importVariableByKeyAsync(key)\n- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n- Work section by section, one use_figma call per section\n- Return all created node IDs from each call\n\nStep 4: After building all sections with components, delete the original flat capture frame.\n\nAfter completing ALL four steps, return the captureId and endpoint from step 1 as JSON: {"captureId": "...", "endpoint": "..."}\n\nIf asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Do not open any URLs in a browser.`;
-    allowedTools = "mcp__figma__generate_figma_design,mcp__figma__get_metadata,mcp__figma__use_figma,mcp__figma__search_design_system,mcp__figma__get_screenshot,mcp__figma__get_variable_defs";
+    prompt = `Build a design in the Figma file at "${fileUrl}" that recreates the web page titled "${safeTitle}" using real design system components. Complete ALL steps.\n\nStep 1: Call search_design_system to find components in the file's design system libraries. Run multiple searches with different terms: "button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". Record the component keys, variable keys, and style keys you find.\n\nStep 2: Call use_figma to build a page in the file that recreates the web page layout using the real design system components found in step 1. You MUST:\n- Pass the file URL "${fileUrl}" to use_figma\n- Import components using figma.importComponentSetByKeyAsync(key)\n- Create instances using component.createInstance()\n- Import variables using figma.variables.importVariableByKeyAsync(key)\n- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n- Work section by section, one use_figma call per section\n- Return all created node IDs from each call\n\nAfter completing all steps, return {"status": "complete"}.\n\nIf asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Do not open any URLs in a browser.`;
+    allowedTools = "mcp__figma__use_figma,mcp__figma__search_design_system,mcp__figma__get_metadata,mcp__figma__get_screenshot,mcp__figma__get_variable_defs";
     timeout = 300000;
   } else if (fileUrl) {
     prompt = `Call the generate_figma_design tool with title "${safeTitle}" and pass the file_url parameter set to "${fileUrl}" so the capture goes into that existing file instead of creating a new one. If asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Do not open any URLs in a browser. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
@@ -74,11 +74,16 @@ function handleMessage(message) {
         text = envelope.result || envelope.content || JSON.stringify(envelope);
       } catch {}
 
-      const { captureId, endpoint } = extractConfig(text);
-      if (captureId && endpoint) {
-        sendMessage({ captureId, endpoint });
+      if (useDesignSystem) {
+        // DS mode: no captureId needed — work was done via MCP tools
+        sendMessage({ status: "complete" });
       } else {
-        sendMessage({ error: "Could not get captureId/endpoint. Is Figma MCP configured?" });
+        const { captureId, endpoint } = extractConfig(text);
+        if (captureId && endpoint) {
+          sendMessage({ captureId, endpoint });
+        } else {
+          sendMessage({ error: "Could not get captureId/endpoint. Is Figma MCP configured?" });
+        }
       }
       process.exit(0);
     }

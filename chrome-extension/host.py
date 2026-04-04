@@ -114,15 +114,14 @@ def main():
 
         if use_design_system and file_url:
             prompt = (
-                f'You MUST complete ALL of the following steps in order. Do not stop after step 1.\n\n'
-                f'Step 1: Call generate_figma_design with title "{title}" and pass the file_url parameter '
-                f'set to "{file_url}". Save the captureId and endpoint from the response.\n\n'
-                f'Step 2: Call search_design_system to find components in the file\'s design system libraries. '
-                f'Pass the file URL "{file_url}" as context. Run multiple searches with different terms: '
+                f'Build a design in the Figma file at "{file_url}" that recreates the web page titled "{title}" '
+                "using real design system components. Complete ALL steps.\n\n"
+                "Step 1: Call search_design_system to find components in the file's design system libraries. "
+                f'Run multiple searches with different terms: '
                 '"button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". '
                 "Record the component keys, variable keys, and style keys you find.\n\n"
-                "Step 3: Call use_figma to build a new page in the file that recreates the captured page "
-                "using the real design system components found in step 2. You MUST:\n"
+                "Step 2: Call use_figma to build a page in the file that recreates the web page layout "
+                "using the real design system components found in step 1. You MUST:\n"
                 f'- Pass the file URL "{file_url}" to use_figma\n'
                 "- Import components using figma.importComponentSetByKeyAsync(key)\n"
                 "- Create instances using component.createInstance()\n"
@@ -131,17 +130,14 @@ def main():
                 "- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n"
                 "- Work section by section, one use_figma call per section\n"
                 "- Return all created node IDs from each call\n\n"
-                "Step 4: After building all sections with components, delete the original flat capture frame.\n\n"
-                "After completing ALL four steps, return the captureId and endpoint from step 1 as JSON: "
-                '{"captureId": "...", "endpoint": "..."}\n\n'
+                'After completing all steps, return {"status": "complete"}.\n\n'
                 "If asked to choose an organization or team, select the first one available. "
                 "Do not ask for confirmation or clarification. Do not open any URLs in a browser."
             )
             allowed_tools = (
-                "mcp__figma__generate_figma_design,"
-                "mcp__figma__get_metadata,"
                 "mcp__figma__use_figma,"
                 "mcp__figma__search_design_system,"
+                "mcp__figma__get_metadata,"
                 "mcp__figma__get_screenshot,"
                 "mcp__figma__get_variable_defs"
             )
@@ -187,13 +183,18 @@ def main():
         except (json.JSONDecodeError, AttributeError):
             pass
 
-        config = extract_config(str(text))
-        logging.info("Extracted config: %s", config)
-
-        if config["captureId"] and config["endpoint"]:
-            send_message(config)
+        if use_design_system:
+            # DS mode: no captureId needed — work was done via MCP tools
+            logging.info("DS mode complete. Result: %.200s", text)
+            send_message({"status": "complete"})
         else:
-            send_message({"error": "Could not get captureId/endpoint. Is Figma MCP configured in Claude Code?"})
+            config = extract_config(str(text))
+            logging.info("Extracted config: %s", config)
+
+            if config["captureId"] and config["endpoint"]:
+                send_message(config)
+            else:
+                send_message({"error": "Could not get captureId/endpoint. Is Figma MCP configured in Claude Code?"})
 
     except subprocess.TimeoutExpired:
         logging.error("Timed out waiting for Claude")
