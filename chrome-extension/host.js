@@ -37,18 +37,33 @@ function handleMessage(message) {
   }
 
   const safeTitle = (message.title || "Web Capture").replace(/"/g, '\\"');
-  const prompt = `Call the generate_figma_design tool to create a new capture with title "${safeTitle}". If asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
+  const fileUrl = message.fileUrl || "";
+  const useDesignSystem = message.useDesignSystem || false;
+
+  let prompt;
+  let allowedTools = "mcp__figma__generate_figma_design,mcp__figma__get_metadata";
+  let timeout = 60000;
+
+  if (useDesignSystem && fileUrl) {
+    prompt = `Capture the web page titled "${safeTitle}" into the Figma file at ${fileUrl} using design system components. Follow this workflow:\n1. Call generate_figma_design to capture the page into the file as a flat reference.\n2. Use search_design_system to find matching components, variables, and styles in the file's libraries. Search for common UI elements: buttons, inputs, cards, navigation, headers, footers, icons, avatars, toggles, tags, etc.\n3. Use use_figma to create a new frame in the file that rebuilds the page layout using real component instances, variable bindings for colors and spacing, and proper auto layout structure. Work section by section.\n4. Delete the flat capture reference frame when the component-based version is complete.\nIf asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
+    allowedTools = "mcp__figma__generate_figma_design,mcp__figma__get_metadata,mcp__figma__use_figma,mcp__figma__search_design_system,mcp__figma__get_screenshot,mcp__figma__get_variable_defs";
+    timeout = 300000;
+  } else if (fileUrl) {
+    prompt = `Call the generate_figma_design tool to capture with title "${safeTitle}" into the existing Figma file at ${fileUrl}. If asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
+  } else {
+    prompt = `Call the generate_figma_design tool to create a new capture with title "${safeTitle}". If asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
+  }
 
   execFile(
     "claude",
-    ["-p", prompt, "--output-format", "json"],
-    { timeout: 60000, maxBuffer: 1024 * 1024 },
+    ["-p", prompt, "--output-format", "json", "--allowedTools", allowedTools],
+    { timeout, maxBuffer: 1024 * 1024 },
     (err, stdout) => {
       if (err) {
         sendMessage({
           error: err.code === "ENOENT"
             ? "Claude Code not found. Install from https://claude.ai/code"
-            : err.killed ? "Timed out (60s)." : `Claude error: ${err.message}`,
+            : err.killed ? "Timed out. Try again." : `Claude error: ${err.message}`,
         });
         return process.exit(0);
       }
