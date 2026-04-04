@@ -45,7 +45,7 @@ function handleMessage(message) {
   let timeout = 60000;
 
   if (useDesignSystem && fileUrl) {
-    prompt = `Capture the web page titled "${safeTitle}" using design system components. Follow this workflow:\n1. Call generate_figma_design with title "${safeTitle}" and pass the file_url parameter set to "${fileUrl}" so the capture goes into that existing file.\n2. Use search_design_system to find matching components, variables, and styles in the file's libraries. Search for common UI elements: buttons, inputs, cards, navigation, headers, footers, icons, avatars, toggles, tags, etc.\n3. Use use_figma to create a new frame in the file that rebuilds the page layout using real component instances, variable bindings for colors and spacing, and proper auto layout structure. Work section by section.\n4. Delete the flat capture reference frame when the component-based version is complete.\nIf asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Return ONLY the JSON object containing captureId and endpoint. No other text.`;
+    prompt = `Capture the web page titled "${safeTitle}" using design system components. Follow this workflow:\n1. Call generate_figma_design with title "${safeTitle}" and pass the file_url parameter set to "${fileUrl}" so the capture goes into that existing file.\n2. Use search_design_system to find matching components, variables, and styles in the file's libraries. Search for common UI elements: buttons, inputs, cards, navigation, headers, footers, icons, avatars, toggles, tags, etc.\n3. Use use_figma to create a new frame in the file that rebuilds the page layout using real component instances, variable bindings for colors and spacing, and proper auto layout structure. Work section by section.\n4. Delete the flat capture reference frame when the component-based version is complete.\nIf asked to choose an organization or team, select the first one available. Do not ask for confirmation or clarification. Do not open any URLs in a browser. Return ONLY the JSON object containing captureId and endpoint from step 1. No other text.`;
     allowedTools = "mcp__figma__generate_figma_design,mcp__figma__get_metadata,mcp__figma__use_figma,mcp__figma__search_design_system,mcp__figma__get_screenshot,mcp__figma__get_variable_defs";
     timeout = 300000;
   } else if (fileUrl) {
@@ -91,5 +91,10 @@ function extractConfig(text) {
   if (m) { try { const p = JSON.parse(m[0]); if (p.captureId && p.endpoint) return p; } catch {} }
   const id = text.match(/captureId["'\s:]+([a-zA-Z0-9_-]+)/);
   const ep = text.match(/endpoint["'\s:]+(https?:\/\/[^\s"']+)/);
+  if (id?.[1] && ep?.[1]) return { captureId: id[1], endpoint: ep[1] };
+  // Fallback: extract from figmacapture URL format
+  const fc = text.match(/figmacapture=([a-zA-Z0-9_-]+)/);
+  const fe = text.match(/figmaendpoint=(https?[^\s&"']+)/);
+  if (fc?.[1] && fe?.[1]) return { captureId: fc[1], endpoint: decodeURIComponent(fe[1]) };
   return { captureId: id?.[1] || null, endpoint: ep?.[1] || null };
 }
