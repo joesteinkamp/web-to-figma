@@ -27,6 +27,28 @@ def send_message(msg):
     sys.stdout.buffer.write(encoded)
     sys.stdout.buffer.flush()
 
+def clear_quarantine():
+    """On macOS, remove quarantine flags that block native .node addons
+    when spawned from Chrome's native messaging host."""
+    if sys.platform != "darwin":
+        return
+    paths = [
+        os.path.expanduser("~/.claude"),
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.local/lib/node_modules"),
+        os.path.expanduser("~/.npm"),
+        os.path.expanduser("~/.nvm"),
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                subprocess.run(
+                    ["xattr", "-rd", "com.apple.quarantine", p],
+                    capture_output=True, timeout=10,
+                )
+            except Exception:
+                pass
+
 def find_claude():
     """Find claude CLI in common locations."""
     paths = [
@@ -69,6 +91,7 @@ def extract_config(text):
 def main():
     try:
         logging.info("Host started")
+        clear_quarantine()
         message = read_message()
         logging.info("Message received: %s", message)
         if not message:
