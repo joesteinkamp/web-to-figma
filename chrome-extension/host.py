@@ -82,9 +82,10 @@ def main():
 
         if use_design_system and file_url:
             prompt = (
-                f'Capture the web page titled "{title}" into the Figma file at {file_url} '
-                "using design system components. Follow this workflow:\n"
-                "1. Call generate_figma_design to capture the page into the file as a flat reference.\n"
+                f'Capture the web page titled "{title}" using design system components. '
+                f'Use the Figma file URL "{file_url}" so captures go to that existing file. '
+                "Follow this workflow:\n"
+                "1. Call generate_figma_design to create a capture into the file as a flat reference.\n"
                 "2. Use search_design_system to find matching components, variables, and styles "
                 "in the file's libraries. Search for common UI elements: buttons, inputs, cards, "
                 "navigation, headers, footers, icons, avatars, toggles, tags, etc.\n"
@@ -107,8 +108,8 @@ def main():
             timeout = 300
         elif file_url:
             prompt = (
-                f'Call the generate_figma_design tool to capture with title "{title}" '
-                f'into the existing Figma file at {file_url}. '
+                f'Call the generate_figma_design tool to create a new capture with title "{title}". '
+                f'Use the Figma file URL "{file_url}" so the capture is added to that existing file. '
                 "If asked to choose an organization or team, select the first one available. "
                 "Do not ask for confirmation or clarification. "
                 "Return ONLY the JSON object containing captureId and endpoint. No other text."
