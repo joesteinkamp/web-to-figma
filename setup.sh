@@ -40,11 +40,6 @@ fi
 
 # --- Check prerequisites ---
 
-# Check if stdin is a terminal (interactive). When piped via curl | bash,
-# we can't prompt, so just warn and continue.
-INTERACTIVE=false
-[ -t 0 ] && INTERACTIVE=true
-
 MISSING_PREREQS=()
 
 # Find python3
@@ -65,18 +60,10 @@ echo "  ✓ Python 3 found ($PYTHON)"
 # Claude Code CLI
 CLAUDE_CMD=$(command -v claude 2>/dev/null || true)
 if [ -z "$CLAUDE_CMD" ]; then
-  echo ""
-  echo "⚠ Claude Code CLI not found."
-  echo "  Install it with:  npm install -g @anthropic-ai/claude-code"
-  echo "  More info: https://docs.anthropic.com/en/docs/claude-code"
+  echo "  ✗ Claude Code CLI not found"
+  echo "    Install it with:  npm install -g @anthropic-ai/claude-code"
+  echo "    More info: https://docs.anthropic.com/en/docs/claude-code"
   MISSING_PREREQS+=("Claude Code")
-  if [ "$INTERACTIVE" = true ]; then
-    echo ""
-    read -r -p "Continue anyway? (y/N) " REPLY
-    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
-      exit 1
-    fi
-  fi
 else
   echo "  ✓ Claude Code found ($CLAUDE_CMD)"
 fi
@@ -86,28 +73,11 @@ SETTINGS_FILE="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS_FILE" ] && grep -q "figma" "$SETTINGS_FILE" 2>/dev/null; then
   echo "  ✓ Figma MCP server configured"
 else
-  echo ""
-  echo "⚠ Figma MCP server not found in Claude Code settings."
-  echo "  Add this to $SETTINGS_FILE:"
-  echo ""
-  echo '  {
-    "mcpServers": {
-      "figma": {
-        "command": "npx",
-        "args": ["-y", "figma-developer-mcp", "--stdio"]
-      }
-    }
-  }'
-  echo ""
-  echo "  Then restart Claude Code and follow the Figma auth prompts."
+  echo "  ✗ Figma MCP server not found in Claude Code settings"
+  echo "    Add this to $SETTINGS_FILE:"
+  echo '    {"mcpServers":{"figma":{"command":"npx","args":["-y","figma-developer-mcp","--stdio"]}}}'
+  echo "    Then restart Claude Code and follow the Figma auth prompts."
   MISSING_PREREQS+=("Figma MCP")
-  if [ "$INTERACTIVE" = true ]; then
-    echo ""
-    read -r -p "Continue anyway? (y/N) " REPLY
-    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
-      exit 1
-    fi
-  fi
 fi
 
 # --- Install files to ~/.web-to-figma ---
