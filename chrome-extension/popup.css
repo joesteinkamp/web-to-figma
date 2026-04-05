@@ -135,13 +135,6 @@ button:disabled {
   transform: rotate(45deg);
 }
 
-.tooltip .tooltip-heading {
-  font-weight: 600;
-  color: #fff;
-  margin: 0 0 6px;
-  font-size: 12px;
-}
-
 .tooltip p {
   margin: 0 0 6px;
 }
