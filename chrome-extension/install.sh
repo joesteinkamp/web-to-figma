@@ -31,6 +31,8 @@ if [ -z "$EXT_ID" ]; then
   exit 1
 fi
 
+# --- Check prerequisites ---
+
 # Find python3
 PYTHON=""
 for p in /usr/bin/python3 /opt/homebrew/bin/python3 /usr/local/bin/python3; do
@@ -43,6 +45,49 @@ if [ -z "$PYTHON" ]; then
   echo "Error: python3 not found. Install via: xcode-select --install"
   echo "  or: brew install python3"
   exit 1
+fi
+echo "  ✓ Python 3 found ($PYTHON)"
+
+# Claude Code CLI
+CLAUDE_CMD=$(command -v claude 2>/dev/null || true)
+if [ -z "$CLAUDE_CMD" ]; then
+  echo ""
+  echo "Claude Code CLI not found."
+  echo "Install it with:  npm install -g @anthropic-ai/claude-code"
+  echo "  More info: https://docs.anthropic.com/en/docs/claude-code"
+  echo ""
+  read -r -p "Continue anyway? (y/N) " REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
+else
+  echo "  ✓ Claude Code found ($CLAUDE_CMD)"
+fi
+
+# Figma MCP server
+SETTINGS_FILE="$HOME/.claude/settings.json"
+if [ -f "$SETTINGS_FILE" ] && grep -q "figma" "$SETTINGS_FILE" 2>/dev/null; then
+  echo "  ✓ Figma MCP server configured"
+else
+  echo ""
+  echo "Figma MCP server not found in Claude Code settings."
+  echo "Add this to $SETTINGS_FILE:"
+  echo ""
+  echo '  {
+    "mcpServers": {
+      "figma": {
+        "command": "npx",
+        "args": ["-y", "figma-developer-mcp", "--stdio"]
+      }
+    }
+  }'
+  echo ""
+  echo "Then restart Claude Code and follow the Figma auth prompts."
+  echo ""
+  read -r -p "Continue anyway? (y/N) " REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
 fi
 
 # --- Native messaging manifests (for regular capture mode) ---
@@ -127,4 +172,4 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 echo ""
-echo "Done! Reload the extension and click Capture to Figma."
+echo "Done! Go back to the extension and click Retry."

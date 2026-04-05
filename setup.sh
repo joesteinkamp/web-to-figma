@@ -16,11 +16,56 @@ if [ -z "$EXT_ID" ]; then
   exit 1
 fi
 
-# Verify python3 (check common locations)
+# --- Check prerequisites ---
+
+# Python 3
 if ! command -v python3 &>/dev/null && [ ! -x /opt/homebrew/bin/python3 ] && [ ! -x /usr/local/bin/python3 ]; then
   echo "Error: python3 not found. Install via: xcode-select --install"
   echo "  or: brew install python3"
   exit 1
+fi
+echo "  ✓ Python 3 found"
+
+# Claude Code CLI
+CLAUDE_PATH=$(command -v claude 2>/dev/null || true)
+if [ -z "$CLAUDE_PATH" ]; then
+  echo ""
+  echo "Claude Code CLI not found."
+  echo "Install it with:  npm install -g @anthropic-ai/claude-code"
+  echo "  More info: https://docs.anthropic.com/en/docs/claude-code"
+  echo ""
+  read -r -p "Continue anyway? (y/N) " REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
+else
+  echo "  ✓ Claude Code found ($CLAUDE_PATH)"
+fi
+
+# Figma MCP server
+SETTINGS_FILE="$HOME/.claude/settings.json"
+if [ -f "$SETTINGS_FILE" ] && grep -q "figma" "$SETTINGS_FILE" 2>/dev/null; then
+  echo "  ✓ Figma MCP server configured"
+else
+  echo ""
+  echo "Figma MCP server not found in Claude Code settings."
+  echo "Add this to $SETTINGS_FILE:"
+  echo ""
+  echo '  {
+    "mcpServers": {
+      "figma": {
+        "command": "npx",
+        "args": ["-y", "figma-developer-mcp", "--stdio"]
+      }
+    }
+  }'
+  echo ""
+  echo "Then restart Claude Code and follow the Figma auth prompts."
+  echo ""
+  read -r -p "Continue anyway? (y/N) " REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
 fi
 
 # Download host script
@@ -86,28 +131,8 @@ if [ "$INSTALLED" -eq 0 ]; then
   exit 1
 fi
 
-# macOS: remove quarantine flags from Claude Code and its dependencies
-# When Chrome spawns native messaging hosts, macOS Gatekeeper may block
-# native .node addons that work fine from Terminal
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  echo "Clearing macOS quarantine flags for Claude Code..."
-  # Clear the claude binary's entire installation tree
-  CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
-  if [ -f "$CLAUDE_PATH" ]; then
-    REAL_PATH=$(readlink -f "$CLAUDE_PATH" 2>/dev/null || realpath "$CLAUDE_PATH" 2>/dev/null || echo "$CLAUDE_PATH")
-    xattr -rd com.apple.quarantine "$(dirname "$REAL_PATH")" 2>/dev/null || true
-  fi
-  # Clear broad paths that may contain native .node addons
-  for DIR in "$HOME/.claude" "$HOME/.local" "$HOME/.npm" "$HOME/.nvm" "$HOME/.cache" "/usr/local/lib/node_modules"; do
-    [ -d "$DIR" ] && xattr -rd com.apple.quarantine "$DIR" 2>/dev/null || true
-  done
-  # Find and clear any .node files in user home
-  echo "Clearing quarantine on native Node.js addons..."
-  find "$HOME" -maxdepth 6 -name "*.node" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
-fi
-
 echo ""
 echo "Done! Installed for $INSTALLED browser(s)."
 echo "  Host: $INSTALL_DIR/host.py"
 echo ""
-echo "Reload the extension and click Capture to Figma."
+echo "Go back to the extension and click Retry."
