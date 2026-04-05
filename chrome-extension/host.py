@@ -27,29 +27,29 @@ def send_message(msg):
     sys.stdout.buffer.write(encoded)
     sys.stdout.buffer.flush()
 
-def clear_node_quarantine():
-    """Clear macOS quarantine from .node files in the system temp dir.
-    Returns True if any files were cleared."""
+def fix_node_quarantine():
+    """Ad-hoc codesign .node files in the system temp dir so they pass Gatekeeper.
+    Claude Code extracts native addons to temp with a unique name per run.
+    When spawned from a browser, these get quarantined. A codesigned file
+    passes Gatekeeper even with quarantine. Returns True if any files were signed."""
     if sys.platform != "darwin":
         return False
     import tempfile, glob
     tmpdir = tempfile.gettempdir()
-    cleared = False
+    fixed = False
     for f in glob.glob(os.path.join(tmpdir, ".*.node")):
         try:
+            # Ad-hoc codesign — makes the file pass Gatekeeper even with quarantine
             result = subprocess.run(
-                ["xattr", "-l", f], capture_output=True, text=True, timeout=5,
+                ["codesign", "--sign", "-", "--force", f],
+                capture_output=True, timeout=10,
             )
-            if "com.apple.quarantine" in result.stdout:
-                subprocess.run(
-                    ["xattr", "-d", "com.apple.quarantine", f],
-                    capture_output=True, timeout=5,
-                )
-                cleared = True
-                logging.info("Cleared quarantine from %s", f)
+            if result.returncode == 0:
+                fixed = True
+                logging.info("Codesigned %s", f)
         except Exception:
             pass
-    return cleared
+    return fixed
 
 def load_skills_context():
     """Load Figma skill reference docs for design system mode."""
@@ -134,28 +134,47 @@ def main():
         use_design_system = message.get("useDesignSystem", False)
 
         if use_design_system and file_url:
+            # Build a description of the page from captured structure
+            page_structure = message.get("pageStructure", [])
+            page_desc = ""
+            if page_structure:
+                lines = []
+                for el in page_structure[:80]:
+                    tag = el.get("tag", "")
+                    text = el.get("text", "")[:60]
+                    if text:
+                        lines.append(f"  <{tag}> {text}")
+                page_desc = "\nHere is the actual page structure to recreate:\n" + "\n".join(lines) + "\n\n"
+
             prompt = (
-                f'Build a simple layout in the Figma file at "{file_url}" inspired by '
-                f'the web page titled "{title}".\n\n'
-                "Do this in exactly 3 steps, no more:\n"
-                "1. Call search_design_system once with query \"button card input nav\" "
-                "to find available components. Note the component keys.\n"
-                "2. Call use_figma once to create a frame and add instances of the most "
-                "relevant components found. Import components by key using "
-                "figma.importComponentSetByKeyAsync(key), create instances, and arrange "
-                "them in a vertical auto-layout frame. Return all created node IDs.\n"
-                "3. Return {\"status\": \"complete\"} when done.\n\n"
-                "Keep it simple — just demonstrate using the design system components. "
-                "Do not search multiple times. Do not validate with screenshots. "
-                "Do not ask for confirmation. Do not open URLs in a browser. "
-                "If asked to choose an organization or team, select the first one available."
+                f'Build a design in the Figma file at "{file_url}" that recreates the web page titled "{title}" '
+                f'using real design system components.{page_desc}'
+                "Complete ALL steps.\n\n"
+                "Step 1: Call search_design_system to find components in the file's design system libraries. "
+                'Run multiple searches with different terms: '
+                '"button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". '
+                "Record the component keys, variable keys, and style keys you find.\n\n"
+                "Step 2: Call use_figma to build a page in the file that recreates the web page layout "
+                "using the real design system components found in step 1. You MUST:\n"
+                f'- Pass the file URL "{file_url}" to use_figma\n'
+                "- Import components using figma.importComponentSetByKeyAsync(key)\n"
+                "- Create instances using component.createInstance()\n"
+                "- Import variables using figma.variables.importVariableByKeyAsync(key)\n"
+                "- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n"
+                "- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n"
+                "- Work section by section, one use_figma call per section\n"
+                "- Return all created node IDs from each call\n\n"
+                'After completing all steps, return {"status": "complete"}.\n\n'
+                "If asked to choose an organization or team, select the first one available. "
+                "Do not ask for confirmation or clarification. Do not open any URLs in a browser."
             )
             allowed_tools = (
                 "mcp__figma__use_figma,"
-                "mcp__figma__search_design_system"
+                "mcp__figma__search_design_system,"
+                "mcp__figma__get_metadata,"
+                "mcp__figma__get_variable_defs"
             )
-            system_context = load_skills_context()
-            timeout = 120
+            timeout = 600
         elif file_url:
             prompt = (
                 f'Call the generate_figma_design tool with title "{title}" '
@@ -182,13 +201,19 @@ def main():
             claude, "-p", prompt,
             "--output-format", "json",
             "--allowedTools", allowed_tools,
-            "--disallowedTools", "Bash,Read,Write,Edit,Glob,Grep,Agent",
+            "--permission-mode", "auto",
+            "--max-turns", "20" if use_design_system else "5",
         ]
-        if use_design_system and system_context:
+        if use_design_system:
+            system_context = load_skills_context()
             cmd += ["--append-system-prompt", system_context]
 
-        # Clear any quarantined .node files before running Claude
-        clear_node_quarantine()
+        # Prevent Claude from loading native .node addons. When spawned from
+        # a browser's native messaging host, macOS quarantine blocks unsigned
+        # .node files extracted by Claude's SEA binary, causing Gatekeeper errors.
+        # The --no-addons flag tells Node.js to skip native addons entirely.
+        env = os.environ.copy()
+        env["NODE_OPTIONS"] = "--no-addons"
 
         result = subprocess.run(
             cmd,
@@ -196,18 +221,8 @@ def main():
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
-
-        # If Claude failed and there are newly quarantined .node files, clear and retry
-        if result.returncode != 0 and clear_node_quarantine():
-            logging.info("Retrying after clearing quarantine from .node files")
-            result = subprocess.run(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
         logging.info("Claude exit code: %s", result.returncode)
         logging.debug("Claude stdout: %.500s", result.stdout)
         if result.stderr:
@@ -219,6 +234,13 @@ def main():
             text = envelope.get("result") or envelope.get("content") or text
         except (json.JSONDecodeError, AttributeError):
             pass
+
+        # Check for auth errors
+        text_lower = str(text).lower()
+        if any(s in text_lower for s in ["auth", "token expired", "unauthorized", "401", "login", "authenticate"]):
+            logging.warning("Auth error detected: %.200s", text)
+            send_message({"error": "Figma auth expired. Run 'claude' in your terminal to re-authenticate with Figma."})
+            return
 
         if use_design_system:
             # DS mode: no captureId needed — work was done via MCP tools

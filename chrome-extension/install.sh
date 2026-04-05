@@ -6,7 +6,16 @@ set -e
 
 HOST_NAME="com.web_to_figma.capture"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HOST_SCRIPT="$SCRIPT_DIR/host-wrapper.sh"
+INSTALL_DIR="$HOME/.web-to-figma"
+
+# Copy wrapper and host to a stable location outside the repo.
+# Some browsers (e.g. Dia) cannot exec scripts from certain directories.
+mkdir -p "$INSTALL_DIR"
+cp "$SCRIPT_DIR/host-wrapper.sh" "$INSTALL_DIR/host-wrapper.sh"
+cp "$SCRIPT_DIR/host.py" "$INSTALL_DIR/host.py"
+cp -r "$SCRIPT_DIR/skills" "$INSTALL_DIR/skills" 2>/dev/null || true
+chmod +x "$INSTALL_DIR/host-wrapper.sh"
+HOST_SCRIPT="$INSTALL_DIR/host-wrapper.sh"
 
 # Get extension ID
 if [ -n "$1" ]; then
@@ -91,5 +100,29 @@ fi
 echo ""
 echo "Installed manifest for $INSTALLED browser(s)."
 echo "  Host: $HOST_SCRIPT"
+
+# Pre-warm Claude to extract native addons without quarantine.
+# When browsers spawn Claude via native messaging, macOS quarantine
+# blocks the .node addon. Running it once from terminal (no quarantine)
+# ensures the addon exists cleanly for future browser-spawned runs.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  CLAUDE=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
+  if [ -x "$CLAUDE" ]; then
+    echo ""
+    echo "Pre-warming Claude Code (one-time setup)..."
+    # Use get_screenshot to force the image processing .node addon to load.
+    # A simple prompt won't trigger it — Claude must actually process image data.
+    "$CLAUDE" -p "Call get_screenshot for the Figma file at https://www.figma.com/design/placeholder. If it fails, that is fine." \
+      --output-format json --max-turns 2 --permission-mode auto \
+      --allowedTools "mcp__figma__get_screenshot" > /dev/null 2>&1 || true
+    # Clear any quarantine from extracted .node files
+    TMPDIR_PATH=$(python3 -c "import tempfile; print(tempfile.gettempdir())" 2>/dev/null || echo "/tmp")
+    for f in "$TMPDIR_PATH"/.*.node; do
+      [ -f "$f" ] && xattr -d com.apple.quarantine "$f" 2>/dev/null
+    done
+    echo "  Done."
+  fi
+fi
+
 echo ""
 echo "Reload the extension and click Capture to Figma."

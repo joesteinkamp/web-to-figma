@@ -1,11 +1,11 @@
 const NATIVE_HOST = "com.web_to_figma.capture";
 
-let captureState = { active: false, step: 0 };
+let captureState = { active: false, step: 0, dsMode: false };
 let totalSteps = 3;
 
 function sendProgress(step, error) {
-  captureState = { active: !error && step < totalSteps, step, error: error || null };
-  chrome.runtime.sendMessage({ action: "capture-progress", step, error: error || null }).catch(() => {});
+  captureState = { active: !error && step < totalSteps, step, error: error || null, dsMode: captureState.dsMode };
+  chrome.runtime.sendMessage({ action: "capture-progress", step, error: error || null, dsMode: captureState.dsMode }).catch(() => {});
 }
 
 function callNativeHost(message) {
@@ -27,6 +27,7 @@ function callNativeHost(message) {
 async function handleCapture(tab, options = {}) {
   const dsMode = options.useDesignSystem || false;
   totalSteps = dsMode ? 6 : 3;
+  captureState.dsMode = dsMode;
 
   // All real work starts immediately in parallel
   sendProgress(1);
@@ -36,6 +37,37 @@ async function handleCapture(tab, options = {}) {
   };
   if (options.fileUrl) hostMsg.fileUrl = options.fileUrl;
   if (dsMode) hostMsg.useDesignSystem = true;
+
+  // For DS mode, capture the page structure so Claude knows what to build
+  if (dsMode) {
+    const [structResult] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        function isVisible(el) {
+          if (!el.offsetParent && el.tagName !== "BODY" && el.tagName !== "HTML") return false;
+          const style = getComputedStyle(el);
+          return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+        }
+        const els = document.querySelectorAll("h1,h2,h3,h4,nav,header,footer,main,section,form,button,input,a,img,table");
+        const items = [];
+        els.forEach((el) => {
+          if (!isVisible(el)) return;
+          const tag = el.tagName.toLowerCase();
+          const text = el.textContent?.trim().slice(0, 80) || "";
+          const role = el.getAttribute("role") || "";
+          const placeholder = el.getAttribute("placeholder") || "";
+          if (text || role || placeholder) {
+            items.push({ tag, text, role, placeholder: placeholder || undefined });
+          }
+        });
+        return items.slice(0, 100);
+      },
+      world: "MAIN",
+    });
+    if (structResult?.result) {
+      hostMsg.pageStructure = structResult.result;
+    }
+  }
 
   // DS mode works entirely via MCP tools — no client-side capture needed
   const workDone = dsMode
@@ -59,21 +91,27 @@ async function handleCapture(tab, options = {}) {
   if (dsMode) {
     // DS mode: no overlay needed — work happens entirely via MCP tools
     // (search_design_system + use_figma). Run progress timers in parallel.
+    let aborted = false;
     const progressTimer = (async () => {
       await new Promise((r) => setTimeout(r, 4000));
-      sendProgress(2); // "Connecting to Figma"
+      if (!aborted) sendProgress(2); // "Connecting to Figma"
       await new Promise((r) => setTimeout(r, 10000));
-      sendProgress(3); // "Searching design system"
+      if (!aborted) sendProgress(3); // "Searching design system"
       await new Promise((r) => setTimeout(r, 30000));
-      sendProgress(4); // "Building with components"
+      if (!aborted) sendProgress(4); // "Building with components"
       await new Promise((r) => setTimeout(r, 60000));
-      sendProgress(5); // "Finalizing design"
+      if (!aborted) sendProgress(5); // "Finalizing design"
     })();
 
-    // Wait for the native host to finish all steps
-    await workDone;
+    try {
+      await workDone;
+    } catch (err) {
+      aborted = true;
+      throw err;
+    }
 
     // Jump to final step once work is actually done
+    aborted = true;
     sendProgress(6); // "Design ready in Figma"
   } else {
     // Standard mode: original timing
@@ -101,7 +139,7 @@ async function handleCapture(tab, options = {}) {
     sendProgress(3);
   }
 
-  setTimeout(() => { captureState = { active: false, step: 0 }; totalSteps = 3; }, 5000);
+  setTimeout(() => { captureState = { active: false, step: 0, dsMode: false }; totalSteps = 3; }, 5000);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

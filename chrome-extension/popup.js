@@ -135,7 +135,9 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.runtime.sendMessage({ action: "capture-status" }, (resp) => {
     if (chrome.runtime.lastError) return;
     if (resp?.active) {
+      if (resp.dsMode) addDesignSystemSteps();
       startProgressUI();
+      captureOptions.style.display = "none";
       setStep(resp.step);
     }
   });
