@@ -31,6 +31,14 @@ document.addEventListener("DOMContentLoaded", () => {
     footer.style.display = view === "how" ? "none" : "block";
   }
 
+  function isSetupError(msg) {
+    const lower = msg.toLowerCase();
+    return lower.includes("native messaging host not found") ||
+           lower.includes("native host has exited") ||
+           lower.includes("claude code not found") ||
+           lower.includes("figma mcp");
+  }
+
   function showSetup() {
     const extId = chrome.runtime.id;
     setupCommand.textContent = `curl -fsSL https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/setup.sh | bash -s -- ${extId}`;
@@ -118,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (msg.error) {
       resetUI();
-      if (msg.error.includes("native messaging host not found")) {
+      if (isSetupError(msg.error)) {
         showSetup();
       } else {
         status.textContent = msg.error;
@@ -264,7 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (response?.error) {
         resetUI();
-        if (response.error.includes("native messaging host not found")) {
+        if (isSetupError(response.error)) {
           showSetup();
         } else {
           status.textContent = response.error;
