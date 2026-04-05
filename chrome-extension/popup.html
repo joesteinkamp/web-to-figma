@@ -103,7 +103,7 @@
           <p class="setup-hint" style="margin-top:4px">Then restart Claude Code and follow the Figma auth prompts.</p>
         </li>
         <li>
-          <strong>Install script</strong> — browser extensions can't talk to local programs directly. The install script registers a native messaging host that lets the extension communicate with Claude Code on your machine.
+          <strong>Install script</strong> — browser extensions can't talk to local programs directly. The install script downloads a small native messaging host, registers it with your browser, and on macOS clears Gatekeeper quarantine flags so Chrome can launch it. This one-time setup lets the extension communicate with Claude Code on your machine.
         </li>
       </ol>
     </div>
