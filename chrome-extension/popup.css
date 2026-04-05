@@ -95,6 +95,64 @@ button:disabled {
 
 .sub-option {
   margin-top: 8px;
+  position: relative;
+}
+
+/* Info icon + tooltip */
+
+.info-icon {
+  color: #aaa;
+  font-size: 13px;
+  cursor: default;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.tooltip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  width: 260px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+.tooltip::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  background: #1a1a1a;
+  transform: rotate(45deg);
+}
+
+.tooltip .tooltip-heading {
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.tooltip p {
+  margin: 0 0 6px;
+}
+
+.tooltip p:last-child {
+  margin-bottom: 0;
+}
+
+.info-icon:hover + .tooltip,
+.tooltip:hover {
+  display: block;
 }
 
 /* Progress steps */
