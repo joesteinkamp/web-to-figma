@@ -1,40 +1,135 @@
 #!/bin/bash
-# One-line setup for Web to Figma extension native messaging host.
-# Usage: curl -fsSL https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/setup.sh | bash -s -- <extension-id>
+# Setup script for the Web to Figma extension.
+# Registers the native messaging host and DS background service.
+#
+# Works two ways:
+#   1. From the repo:  ./chrome-extension/install.sh <extension-id>
+#   2. Via curl:        curl -fsSL https://raw.githubusercontent.com/.../setup.sh | bash -s -- <extension-id>
+#      (downloads the required files from GitHub)
 
 set -e
 
 HOST_NAME="com.web_to_figma.capture"
 INSTALL_DIR="$HOME/.web-to-figma"
-HOST_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/chrome-extension/host.py"
+REPO_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/chrome-extension"
+
+# Detect whether we're running from the repo or via curl
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
+if [ -f "$SCRIPT_DIR/host.py" ] && [ -f "$SCRIPT_DIR/host-wrapper.sh" ]; then
+  FROM_REPO=true
+else
+  FROM_REPO=false
+fi
 
 # Get extension ID
-EXT_ID="${1:-}"
-if [ -z "$EXT_ID" ]; then
+if [ -n "$1" ]; then
+  EXT_ID="$1"
+elif [ "$FROM_REPO" = true ]; then
+  echo "Enter your extension ID (find it at chrome://extensions or the equivalent):"
+  read -r EXT_ID
+else
   echo "Usage: bash setup.sh <extension-id>"
   echo "Find your extension ID at chrome://extensions (or equivalent)"
   exit 1
 fi
 
-# Verify python3 (check common locations)
-if ! command -v python3 &>/dev/null && [ ! -x /opt/homebrew/bin/python3 ] && [ ! -x /usr/local/bin/python3 ]; then
+if [ -z "$EXT_ID" ]; then
+  echo "Error: Extension ID is required."
+  exit 1
+fi
+
+# --- Check prerequisites ---
+
+# Find python3
+PYTHON=""
+for p in /usr/bin/python3 /opt/homebrew/bin/python3 /usr/local/bin/python3; do
+  [ -x "$p" ] && PYTHON="$p" && break
+done
+if [ -z "$PYTHON" ]; then
+  PYTHON=$(command -v python3 2>/dev/null || true)
+fi
+if [ -z "$PYTHON" ]; then
   echo "Error: python3 not found. Install via: xcode-select --install"
   echo "  or: brew install python3"
   exit 1
 fi
+echo "  ✓ Python 3 found ($PYTHON)"
 
-# Download host script
+# Claude Code CLI
+CLAUDE_CMD=$(command -v claude 2>/dev/null || true)
+if [ -z "$CLAUDE_CMD" ]; then
+  echo ""
+  echo "Claude Code CLI not found."
+  echo "Install it with:  npm install -g @anthropic-ai/claude-code"
+  echo "  More info: https://docs.anthropic.com/en/docs/claude-code"
+  echo ""
+  read -r -p "Continue anyway? (y/N) " REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
+else
+  echo "  ✓ Claude Code found ($CLAUDE_CMD)"
+fi
+
+# Figma MCP server
+SETTINGS_FILE="$HOME/.claude/settings.json"
+if [ -f "$SETTINGS_FILE" ] && grep -q "figma" "$SETTINGS_FILE" 2>/dev/null; then
+  echo "  ✓ Figma MCP server configured"
+else
+  echo ""
+  echo "Figma MCP server not found in Claude Code settings."
+  echo "Add this to $SETTINGS_FILE:"
+  echo ""
+  echo '  {
+    "mcpServers": {
+      "figma": {
+        "command": "npx",
+        "args": ["-y", "figma-developer-mcp", "--stdio"]
+      }
+    }
+  }'
+  echo ""
+  echo "Then restart Claude Code and follow the Figma auth prompts."
+  echo ""
+  read -r -p "Continue anyway? (y/N) " REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
+fi
+
+# --- Install files to ~/.web-to-figma ---
+
 mkdir -p "$INSTALL_DIR"
-echo "Downloading native host..."
-curl -fsSL "$HOST_URL" -o "$INSTALL_DIR/host.py"
-chmod +x "$INSTALL_DIR/host.py"
 
-# Build manifest
+if [ "$FROM_REPO" = true ]; then
+  echo "Copying files from repo..."
+  cp "$SCRIPT_DIR/host-wrapper.sh" "$INSTALL_DIR/host-wrapper.sh"
+  cp "$SCRIPT_DIR/host.py" "$INSTALL_DIR/host.py"
+  cp "$SCRIPT_DIR/ds-daemon.py" "$INSTALL_DIR/ds-daemon.py"
+  cp "$SCRIPT_DIR/com.web_to_figma.ds.plist" "$INSTALL_DIR/com.web_to_figma.ds.plist"
+  cp -r "$SCRIPT_DIR/skills" "$INSTALL_DIR/skills" 2>/dev/null || true
+else
+  echo "Downloading files..."
+  curl -fsSL "$REPO_URL/host-wrapper.sh" -o "$INSTALL_DIR/host-wrapper.sh"
+  curl -fsSL "$REPO_URL/host.py" -o "$INSTALL_DIR/host.py"
+  curl -fsSL "$REPO_URL/ds-daemon.py" -o "$INSTALL_DIR/ds-daemon.py"
+  curl -fsSL "$REPO_URL/com.web_to_figma.ds.plist" -o "$INSTALL_DIR/com.web_to_figma.ds.plist"
+  mkdir -p "$INSTALL_DIR/skills"
+  curl -fsSL "$REPO_URL/skills/figma-ds-context.md" -o "$INSTALL_DIR/skills/figma-ds-context.md" 2>/dev/null || true
+  curl -fsSL "$REPO_URL/skills/figma-generate-design" -o "$INSTALL_DIR/skills/figma-generate-design" 2>/dev/null || true
+  curl -fsSL "$REPO_URL/skills/figma-use" -o "$INSTALL_DIR/skills/figma-use" 2>/dev/null || true
+fi
+
+chmod +x "$INSTALL_DIR/host-wrapper.sh" "$INSTALL_DIR/ds-daemon.py"
+HOST_SCRIPT="$INSTALL_DIR/host-wrapper.sh"
+
+# --- Native messaging manifests ---
+
 MANIFEST=$(cat <<EOF
 {
   "name": "$HOST_NAME",
   "description": "Web to Figma — invokes Claude Code for Figma capture",
-  "path": "$INSTALL_DIR/host.py",
+  "path": "$HOST_SCRIPT",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://$EXT_ID/"
@@ -43,7 +138,6 @@ MANIFEST=$(cat <<EOF
 EOF
 )
 
-# Install for all detected Chromium browsers
 DIRS=()
 if [[ "$OSTYPE" == "darwin"* ]]; then
   DIRS+=(
@@ -77,6 +171,7 @@ for DIR in "${DIRS[@]}"; do
   if [ -d "$PARENT" ]; then
     mkdir -p "$DIR"
     echo "$MANIFEST" > "$DIR/$HOST_NAME.json"
+    echo "  ✓ $(basename "$(dirname "$DIR")")/$(basename "$DIR")"
     INSTALLED=$((INSTALLED + 1))
   fi
 done
@@ -86,28 +181,28 @@ if [ "$INSTALLED" -eq 0 ]; then
   exit 1
 fi
 
-# macOS: remove quarantine flags from Claude Code and its dependencies
-# When Chrome spawns native messaging hosts, macOS Gatekeeper may block
-# native .node addons that work fine from Terminal
+echo ""
+echo "Installed native messaging for $INSTALLED browser(s)."
+
+# --- DS background service (macOS only — launchd user agent) ---
+
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  echo "Clearing macOS quarantine flags for Claude Code..."
-  # Clear the claude binary's entire installation tree
-  CLAUDE_PATH=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
-  if [ -f "$CLAUDE_PATH" ]; then
-    REAL_PATH=$(readlink -f "$CLAUDE_PATH" 2>/dev/null || realpath "$CLAUDE_PATH" 2>/dev/null || echo "$CLAUDE_PATH")
-    xattr -rd com.apple.quarantine "$(dirname "$REAL_PATH")" 2>/dev/null || true
-  fi
-  # Clear broad paths that may contain native .node addons
-  for DIR in "$HOME/.claude" "$HOME/.local" "$HOME/.npm" "$HOME/.nvm" "$HOME/.cache" "/usr/local/lib/node_modules"; do
-    [ -d "$DIR" ] && xattr -rd com.apple.quarantine "$DIR" 2>/dev/null || true
-  done
-  # Find and clear any .node files in user home
-  echo "Clearing quarantine on native Node.js addons..."
-  find "$HOME" -maxdepth 6 -name "*.node" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
+  PLIST_NAME="com.web_to_figma.ds"
+  PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
+
+  # Unload existing service if running
+  launchctl unload "$PLIST_DEST" 2>/dev/null || true
+
+  # Generate plist with correct paths
+  sed \
+    -e "s|__PYTHON_PATH__|$PYTHON|g" \
+    -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
+    "$INSTALL_DIR/com.web_to_figma.ds.plist" > "$PLIST_DEST"
+
+  # Load service
+  launchctl load "$PLIST_DEST"
+  echo "  ✓ Background service started (localhost:19615)"
 fi
 
 echo ""
-echo "Done! Installed for $INSTALLED browser(s)."
-echo "  Host: $INSTALL_DIR/host.py"
-echo ""
-echo "Reload the extension and click Capture to Figma."
+echo "Done! Go back to the extension and click Retry."
