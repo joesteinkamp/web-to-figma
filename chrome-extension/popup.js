@@ -98,8 +98,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (relabel[n]) s.querySelector(".step-text").textContent = relabel[n];
     });
     const dsSteps = [
-      { step: 4, text: "Building with components" },
-      { step: 5, text: "Finalizing design" },
+      { step: 4, text: "Organizing components" },
+      { step: 5, text: "Composing design" },
       { step: 6, text: "Design ready in Figma" },
     ];
     dsSteps.forEach(({ step, text }) => {

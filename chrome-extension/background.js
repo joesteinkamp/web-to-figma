@@ -1,4 +1,5 @@
 const NATIVE_HOST = "com.web_to_figma.capture";
+const DS_DAEMON_URL = "http://localhost:19615";
 
 let captureState = { active: false, step: 0, dsMode: false };
 let totalSteps = 3;
@@ -24,97 +25,128 @@ function callNativeHost(message) {
   });
 }
 
+async function callDsDaemon(message, onProgress) {
+  // Check if daemon is running
+  try {
+    const health = await fetch(`${DS_DAEMON_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    if (!health.ok) throw new Error();
+  } catch {
+    throw new Error("Design system daemon not running. Re-run the install script in your terminal.");
+  }
+
+  // Start the job (returns immediately)
+  const startResp = await fetch(`${DS_DAEMON_URL}/ds-capture`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(message),
+  });
+  const startData = await startResp.json();
+  if (startData.error) throw new Error(startData.error);
+
+  // Poll for completion every 3 seconds
+  const jobId = startData.id;
+  const startTime = Date.now();
+  while (true) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (onProgress) onProgress(Date.now() - startTime);
+
+    const statusResp = await fetch(`${DS_DAEMON_URL}/status`);
+    const statusData = await statusResp.json();
+
+    if (statusData.id !== jobId) throw new Error("Job was replaced");
+
+    if (statusData.status === "complete") {
+      if (statusData.result?.error) throw new Error(statusData.result.error);
+      return statusData.result;
+    }
+  }
+}
+
+async function capturePageStructure(tabId) {
+  const [structResult] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      function isVisible(el) {
+        if (!el.offsetParent && el.tagName !== "BODY" && el.tagName !== "HTML") return false;
+        const style = getComputedStyle(el);
+        return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+      }
+      const els = document.querySelectorAll("h1,h2,h3,h4,nav,header,footer,main,section,form,button,input,a,img,table");
+      const items = [];
+      els.forEach((el) => {
+        if (!isVisible(el)) return;
+        const tag = el.tagName.toLowerCase();
+        const text = el.textContent?.trim().slice(0, 80) || "";
+        const role = el.getAttribute("role") || "";
+        const placeholder = el.getAttribute("placeholder") || "";
+        if (text || role || placeholder) {
+          items.push({ tag, text, role, placeholder: placeholder || undefined });
+        }
+      });
+      const seen = new Set();
+      return items.filter((item) => {
+        const key = item.tag + ":" + item.text;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 50);
+    },
+    world: "MAIN",
+  });
+  return structResult?.result || [];
+}
+
 async function handleCapture(tab, options = {}) {
   const dsMode = options.useDesignSystem || false;
   totalSteps = dsMode ? 6 : 3;
   captureState.dsMode = dsMode;
 
-  // All real work starts immediately in parallel
   sendProgress(1);
-  const hostMsg = {
-    action: "generate-capture",
-    title: tab.title || "Web Capture",
-  };
-  if (options.fileUrl) hostMsg.fileUrl = options.fileUrl;
-  if (dsMode) hostMsg.useDesignSystem = true;
 
-  // For DS mode, capture the page structure so Claude knows what to build
   if (dsMode) {
-    const [structResult] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        function isVisible(el) {
-          if (!el.offsetParent && el.tagName !== "BODY" && el.tagName !== "HTML") return false;
-          const style = getComputedStyle(el);
-          return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
-        }
-        const els = document.querySelectorAll("h1,h2,h3,h4,nav,header,footer,main,section,form,button,input,a,img,table");
-        const items = [];
-        els.forEach((el) => {
-          if (!isVisible(el)) return;
-          const tag = el.tagName.toLowerCase();
-          const text = el.textContent?.trim().slice(0, 80) || "";
-          const role = el.getAttribute("role") || "";
-          const placeholder = el.getAttribute("placeholder") || "";
-          if (text || role || placeholder) {
-            items.push({ tag, text, role, placeholder: placeholder || undefined });
-          }
-        });
-        return items.slice(0, 100);
-      },
-      world: "MAIN",
+    // DS mode: use localhost daemon (avoids browser quarantine / Gatekeeper)
+    const pageStructure = await capturePageStructure(tab.id);
+    const dsMsg = {
+      title: tab.title || "Web Capture",
+      fileUrl: options.fileUrl,
+      pageStructure,
+    };
+
+    // Progress is driven by polling — advance steps on a schedule
+    // but jump to step 6 the instant the job completes.
+    sendProgress(2);
+    const result = await callDsDaemon(dsMsg, (elapsedMs) => {
+      // Called every poll cycle with elapsed time
+      if (elapsedMs > 120000) sendProgress(5);
+      else if (elapsedMs > 30000) sendProgress(4);
+      else if (elapsedMs > 10000) sendProgress(3);
     });
-    if (structResult?.result) {
-      hostMsg.pageStructure = structResult.result;
-    }
-  }
 
-  // DS mode works entirely via MCP tools — no client-side capture needed
-  const workDone = dsMode
-    ? callNativeHost(hostMsg)
-    : Promise.all([
-        callNativeHost(hostMsg),
-        fetch("https://mcp.figma.com/mcp/html-to-design/capture.js")
-          .then((r) => { if (!r.ok) throw new Error("Failed to fetch Figma capture script"); return r.text(); })
-          .then((scriptText) => chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: (code) => {
-              const el = document.createElement("script");
-              el.textContent = code;
-              document.head.appendChild(el);
-            },
-            args: [scriptText],
-            world: "MAIN",
-          })),
-      ]);
-
-  if (dsMode) {
-    // DS mode: no overlay needed — work happens entirely via MCP tools
-    // (search_design_system + use_figma). Run progress timers in parallel.
-    let aborted = false;
-    const progressTimer = (async () => {
-      await new Promise((r) => setTimeout(r, 4000));
-      if (!aborted) sendProgress(2); // "Connecting to Figma"
-      await new Promise((r) => setTimeout(r, 10000));
-      if (!aborted) sendProgress(3); // "Searching design system"
-      await new Promise((r) => setTimeout(r, 30000));
-      if (!aborted) sendProgress(4); // "Building with components"
-      await new Promise((r) => setTimeout(r, 60000));
-      if (!aborted) sendProgress(5); // "Finalizing design"
-    })();
-
-    try {
-      await workDone;
-    } catch (err) {
-      aborted = true;
-      throw err;
-    }
-
-    // Jump to final step once work is actually done
-    aborted = true;
-    sendProgress(6); // "Design ready in Figma"
+    sendProgress(6);
   } else {
-    // Standard mode: original timing
+    // Standard mode: native messaging + client-side Figma capture
+    const hostMsg = {
+      action: "generate-capture",
+      title: tab.title || "Web Capture",
+    };
+    if (options.fileUrl) hostMsg.fileUrl = options.fileUrl;
+
+    const workDone = Promise.all([
+      callNativeHost(hostMsg),
+      fetch("https://mcp.figma.com/mcp/html-to-design/capture.js")
+        .then((r) => { if (!r.ok) throw new Error("Failed to fetch Figma capture script"); return r.text(); })
+        .then((scriptText) => chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (code) => {
+            const el = document.createElement("script");
+            el.textContent = code;
+            document.head.appendChild(el);
+          },
+          args: [scriptText],
+          world: "MAIN",
+        })),
+    ]);
+
     await new Promise((r) => setTimeout(r, 4000));
     sendProgress(2);
 
@@ -141,6 +173,9 @@ async function handleCapture(tab, options = {}) {
 
   setTimeout(() => { captureState = { active: false, step: 0, dsMode: false }; totalSteps = 3; }, 5000);
 }
+
+// Register uninstall URL — daemon cleans up when extension is removed
+chrome.runtime.setUninstallURL(`${DS_DAEMON_URL}/uninstall`);
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "capture-status") {
