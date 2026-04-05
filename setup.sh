@@ -40,6 +40,8 @@ fi
 
 # --- Check prerequisites ---
 
+MISSING_PREREQS=()
+
 # Find python3
 PYTHON=""
 for p in /usr/bin/python3 /opt/homebrew/bin/python3 /usr/local/bin/python3; do
@@ -58,15 +60,10 @@ echo "  ✓ Python 3 found ($PYTHON)"
 # Claude Code CLI
 CLAUDE_CMD=$(command -v claude 2>/dev/null || true)
 if [ -z "$CLAUDE_CMD" ]; then
-  echo ""
-  echo "Claude Code CLI not found."
-  echo "Install it with:  npm install -g @anthropic-ai/claude-code"
-  echo "  More info: https://docs.anthropic.com/en/docs/claude-code"
-  echo ""
-  read -r -p "Continue anyway? (y/N) " REPLY
-  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
-    exit 1
-  fi
+  echo "  ✗ Claude Code CLI not found"
+  echo "    Install it with:  npm install -g @anthropic-ai/claude-code"
+  echo "    More info: https://docs.anthropic.com/en/docs/claude-code"
+  MISSING_PREREQS+=("Claude Code")
 else
   echo "  ✓ Claude Code found ($CLAUDE_CMD)"
 fi
@@ -76,25 +73,11 @@ SETTINGS_FILE="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS_FILE" ] && grep -q "figma" "$SETTINGS_FILE" 2>/dev/null; then
   echo "  ✓ Figma MCP server configured"
 else
-  echo ""
-  echo "Figma MCP server not found in Claude Code settings."
-  echo "Add this to $SETTINGS_FILE:"
-  echo ""
-  echo '  {
-    "mcpServers": {
-      "figma": {
-        "command": "npx",
-        "args": ["-y", "figma-developer-mcp", "--stdio"]
-      }
-    }
-  }'
-  echo ""
-  echo "Then restart Claude Code and follow the Figma auth prompts."
-  echo ""
-  read -r -p "Continue anyway? (y/N) " REPLY
-  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
-    exit 1
-  fi
+  echo "  ✗ Figma MCP server not found in Claude Code settings"
+  echo "    Add this to $SETTINGS_FILE:"
+  echo '    {"mcpServers":{"figma":{"command":"npx","args":["-y","figma-developer-mcp","--stdio"]}}}'
+  echo "    Then restart Claude Code and follow the Figma auth prompts."
+  MISSING_PREREQS+=("Figma MCP")
 fi
 
 # --- Install files to ~/.web-to-figma ---
@@ -205,4 +188,9 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 echo ""
-echo "Done! Go back to the extension and click Retry."
+if [ ${#MISSING_PREREQS[@]} -gt 0 ]; then
+  echo "Done! But you still need to set up: ${MISSING_PREREQS[*]}"
+  echo "Once those are ready, go back to the extension and click Retry."
+else
+  echo "Done! Go back to the extension and click Retry."
+fi
