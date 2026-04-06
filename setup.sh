@@ -90,13 +90,20 @@ fi
 FIGMA_MCP_FOUND=false
 
 if [ -n "$CLAUDE_CMD" ]; then
-  CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-  if [ -f "$CLAUDE_SETTINGS" ] && grep -q "figma" "$CLAUDE_SETTINGS" 2>/dev/null; then
-    echo "  ✓ Figma MCP configured in Claude Code"
+  # Claude Code stores MCP config in either location
+  CLAUDE_SETTINGS=""
+  for f in "$HOME/.claude/settings.json" "$HOME/.claude.json"; do
+    if [ -f "$f" ] && grep -q "figma" "$f" 2>/dev/null; then
+      CLAUDE_SETTINGS="$f"
+      break
+    fi
+  done
+  if [ -n "$CLAUDE_SETTINGS" ]; then
+    echo "  ✓ Figma MCP configured in Claude Code ($CLAUDE_SETTINGS)"
     FIGMA_MCP_FOUND=true
   else
     echo "  - Figma MCP not found in Claude Code settings"
-    echo "    Add this to $CLAUDE_SETTINGS:"
+    echo "    Add this to ~/.claude/settings.json (or ~/.claude.json):"
     echo '    {"mcpServers":{"figma":{"command":"npx","args":["-y","figma-developer-mcp","--stdio"]}}}'
   fi
 fi
