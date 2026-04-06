@@ -76,11 +76,7 @@ def write_config(provider):
 def build_command(provider, binary, prompt, allowed_tools=None, max_turns=5, system_prompt=None):
     """Build the subprocess command list for the given provider."""
     if provider == "codex":
-        # Global flags (like --full-auto) must precede the exec subcommand
-        cmd = [binary, "--full-auto"]
-        if system_prompt:
-            cmd += ["--append-system-prompt", system_prompt]
-        cmd += ["exec", "--json", prompt]
+        cmd = [binary, "--dangerously-bypass-approvals-and-sandbox", "exec", "--skip-git-repo-check", "--json", prompt]
         return cmd
 
     # Claude Code

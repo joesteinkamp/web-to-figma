@@ -72,45 +72,74 @@ def run_ds_capture(msg):
                 lines.append(f"  <{tag}> {text}")
         page_desc = "\nHere is the actual page structure to recreate:\n" + "\n".join(lines) + "\n\n"
 
-    prompt = (
-        f'Build a design in the Figma file at "{file_url}" that recreates the web page titled "{title}" '
-        f'using real design system components.{page_desc}'
-        "Complete ALL steps.\n\n"
-        "Step 1: Call search_design_system to find components in the file's design system libraries. "
-        'Run multiple searches with different terms: '
-        '"button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". '
-        "Record the component keys, variable keys, and style keys you find.\n\n"
-        "Step 2: Call use_figma to build a page in the file that recreates the web page layout "
-        "using the real design system components found in step 1. You MUST:\n"
-        f'- Pass the file URL "{file_url}" to use_figma\n'
-        "- Import components using figma.importComponentSetByKeyAsync(key)\n"
-        "- Create instances using component.createInstance()\n"
-        "- Import variables using figma.variables.importVariableByKeyAsync(key)\n"
-        "- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n"
-        "- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n"
-        "- Work section by section, one use_figma call per section\n"
-        "- Return all created node IDs from each call\n\n"
-        'After completing all steps, return {"status": "complete"}.\n\n'
-        "If asked to choose an organization or team, select the first one available. "
-        "Do not ask for confirmation or clarification. Do not open any URLs in a browser."
-    )
+    if provider == "codex":
+        # Codex works best with a simple, clear prompt — let it plan its own approach
+        prompt = (
+            f'Recreate the web page titled "{title}" in the Figma file at "{file_url}" '
+            f'using the file\'s design system components and variables.{page_desc}'
+            "Search the design system for available components and variables, then build the page "
+            "using those real components. Bind variables instead of hardcoding colors and spacing. "
+            "If asked to choose an organization or team, select the first one available. "
+            "Do not ask for confirmation."
+        )
+        cmd = providers.build_command(provider, binary, prompt)
+    else:
+        # Claude Code: detailed prompt with skill docs
+        prompt = (
+            f'Build a design in the Figma file at "{file_url}" that recreates the web page titled "{title}" '
+            f'using real design system components.{page_desc}'
+            "Complete ALL steps.\n\n"
+            "Step 1: Call search_design_system to find components in the file's design system libraries. "
+            'Run multiple searches with different terms: '
+            '"button", "input", "card", "nav", "header", "footer", "avatar", "icon", "tag", "toggle". '
+            "Record the component keys, variable keys, and style keys you find.\n\n"
+            "Step 2: Call use_figma to build a page in the file that recreates the web page layout "
+            "using the real design system components found in step 1. You MUST:\n"
+            f'- Pass the file URL "{file_url}" to use_figma\n'
+            "- Import components using figma.importComponentSetByKeyAsync(key)\n"
+            "- Create instances using component.createInstance()\n"
+            "- Import variables using figma.variables.importVariableByKeyAsync(key)\n"
+            "- Bind variables using node.setBoundVariable() instead of hardcoding colors/spacing\n"
+            "- Use auto layout (layoutMode, primaryAxisAlignItems, counterAxisAlignItems)\n"
+            "- Work section by section, one use_figma call per section\n"
+            "- Return all created node IDs from each call\n\n"
+            'After completing all steps, return {"status": "complete"}.\n\n'
+            "If asked to choose an organization or team, select the first one available. "
+            "Do not ask for confirmation or clarification. Do not open any URLs in a browser."
+        )
+        allowed_tools = (
+            "mcp__figma__use_figma,"
+            "mcp__figma__search_design_system,"
+            "mcp__figma__get_metadata,"
+            "mcp__figma__get_screenshot,"
+            "mcp__figma__get_variable_defs"
+        )
+        system_context = load_skills_context()
+        cmd = providers.build_command(
+            provider, binary, prompt,
+            allowed_tools=allowed_tools,
+            max_turns=40,
+            system_prompt=system_context,
+        )
 
-    allowed_tools = (
-        "mcp__figma__use_figma,"
-        "mcp__figma__search_design_system,"
-        "mcp__figma__get_metadata,"
-        "mcp__figma__get_screenshot,"
-        "mcp__figma__get_variable_defs"
-    )
+    # Codex requires running inside a git repo (trusted directory)
+    cwd = None
+    if provider == "codex":
+        cwd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workspace")
+        os.makedirs(cwd, exist_ok=True)
+        if not os.path.isdir(os.path.join(cwd, ".git")):
+            subprocess.run(["git", "init"], cwd=cwd, capture_output=True)
 
-    system_context = load_skills_context()
-
-    cmd = providers.build_command(
-        provider, binary, prompt,
-        allowed_tools=allowed_tools,
-        max_turns=40,
-        system_prompt=system_context,
-    )
+    # Ensure common tool paths are in PATH (launchd has minimal PATH)
+    env = os.environ.copy()
+    home = os.path.expanduser("~")
+    extra_paths = [
+        f"{home}/.local/bin",
+        f"{home}/.npm-global/bin",
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+    ]
+    env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "/usr/bin:/bin")
 
     logging.info("Running %s for DS capture (title=%s)", display_name, title)
     try:
@@ -120,14 +149,28 @@ def run_ds_capture(msg):
             capture_output=True,
             text=True,
             timeout=600,
+            cwd=cwd,
+            env=env,
         )
         logging.info("%s exit code: %s", display_name, result.returncode)
-        logging.debug("%s stdout: %.500s", display_name, result.stdout)
+        # Write full JSONL stream to separate file for debugging
+        stream_log = os.path.expanduser("~/.web-to-figma/last-ds-stream.jsonl")
+        with open(stream_log, "w") as f:
+            f.write(result.stdout)
+        logging.info("Full output written to %s (%d bytes)", stream_log, len(result.stdout))
+
+        if result.returncode != 0 and not result.stdout.strip():
+            stderr = result.stderr.strip() if result.stderr else f"exit code {result.returncode}"
+            logging.error("%s failed: %s", display_name, stderr)
+            return {"error": f"{display_name} failed: {stderr}"}
 
         text = providers.parse_output(provider, result.stdout)
 
         text_lower = str(text).lower()
-        if any(s in text_lower for s in ["auth", "token expired", "unauthorized", "401", "login", "authenticate"]):
+        auth_phrases = ["token expired", "unauthorized", "not authenticated", "authentication failed"]
+        matched = [s for s in auth_phrases if s in text_lower]
+        if matched and "captureId" not in str(text):
+            logging.warning("Auth phrases matched: %s in text: %.300s", matched, text)
             return {"error": f"Figma auth expired. Run '{provider}' in your terminal to re-authenticate with Figma."}
 
         logging.info("DS capture complete")

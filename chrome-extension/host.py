@@ -125,6 +125,14 @@ def handle_generate_capture(message):
         max_turns=5,
     )
 
+    # Codex requires running inside a git repo (trusted directory)
+    cwd = None
+    if provider == "codex":
+        cwd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workspace")
+        os.makedirs(cwd, exist_ok=True)
+        if not os.path.isdir(os.path.join(cwd, ".git")):
+            subprocess.run(["git", "init"], cwd=cwd, capture_output=True)
+
     logging.info("Running command: %s", " ".join(cmd[:5]) + " ...")
     result = subprocess.run(
         cmd,
@@ -132,6 +140,7 @@ def handle_generate_capture(message):
         capture_output=True,
         text=True,
         timeout=90,
+        cwd=cwd,
     )
     logging.info("%s exit code: %s", display_name, result.returncode)
     logging.debug("%s stdout (full): %s", display_name, result.stdout)
@@ -143,7 +152,8 @@ def handle_generate_capture(message):
 
     # Check for auth errors
     text_lower = str(text).lower()
-    if any(s in text_lower for s in ["auth", "token expired", "unauthorized", "401", "login", "authenticate"]):
+    auth_phrases = ["token expired", "unauthorized", "not authenticated", "authentication failed"]
+    if any(s in text_lower for s in auth_phrases) and "captureId" not in str(text):
         logging.warning("Auth error detected: %.200s", text)
         send_message({"error": f"Figma auth expired. Run '{provider}' in your terminal to re-authenticate with Figma."})
         return
