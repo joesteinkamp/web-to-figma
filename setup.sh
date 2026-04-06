@@ -16,16 +16,9 @@ REPO_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/chrom
 # Detect whether we're running from the repo or via curl
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
 if [ -f "$SCRIPT_DIR/host.py" ] && [ -f "$SCRIPT_DIR/host-wrapper.sh" ]; then
-  # Running from inside chrome-extension/
   FROM_REPO=true
-  EXT_DIR="$SCRIPT_DIR"
-elif [ -f "$SCRIPT_DIR/chrome-extension/host.py" ] && [ -f "$SCRIPT_DIR/chrome-extension/host-wrapper.sh" ]; then
-  # Running from the repo root
-  FROM_REPO=true
-  EXT_DIR="$SCRIPT_DIR/chrome-extension"
 else
   FROM_REPO=false
-  EXT_DIR=""
 fi
 
 # Get extension ID
@@ -141,12 +134,12 @@ mkdir -p "$INSTALL_DIR"
 
 if [ "$FROM_REPO" = true ]; then
   echo "Copying files from repo..."
-  cp "$EXT_DIR/host-wrapper.sh" "$INSTALL_DIR/host-wrapper.sh"
-  cp "$EXT_DIR/host.py" "$INSTALL_DIR/host.py"
-  cp "$EXT_DIR/providers.py" "$INSTALL_DIR/providers.py"
-  cp "$EXT_DIR/ds-daemon.py" "$INSTALL_DIR/ds-daemon.py"
-  cp "$EXT_DIR/com.web_to_figma.ds.plist" "$INSTALL_DIR/com.web_to_figma.ds.plist"
-  cp -r "$EXT_DIR/skills" "$INSTALL_DIR/skills" 2>/dev/null || true
+  cp "$SCRIPT_DIR/host-wrapper.sh" "$INSTALL_DIR/host-wrapper.sh"
+  cp "$SCRIPT_DIR/host.py" "$INSTALL_DIR/host.py"
+  cp "$SCRIPT_DIR/providers.py" "$INSTALL_DIR/providers.py"
+  cp "$SCRIPT_DIR/ds-daemon.py" "$INSTALL_DIR/ds-daemon.py"
+  cp "$SCRIPT_DIR/com.web_to_figma.ds.plist" "$INSTALL_DIR/com.web_to_figma.ds.plist"
+  cp -r "$SCRIPT_DIR/skills" "$INSTALL_DIR/skills" 2>/dev/null || true
 else
   echo "Downloading files..."
   curl -fsSL "$REPO_URL/host-wrapper.sh" -o "$INSTALL_DIR/host-wrapper.sh"
