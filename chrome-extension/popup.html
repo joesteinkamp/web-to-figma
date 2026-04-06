@@ -47,6 +47,14 @@
       </div>
     </div>
     <div id="status"></div>
+    <div id="daemonFix" style="display:none">
+      <p class="setup-text">Run this in your terminal to restart the background service:</p>
+      <div class="command-row">
+        <code id="daemonFixCommand" class="command"></code>
+        <button id="copyDaemonFixBtn" class="copy-btn" title="Copy">Copy</button>
+      </div>
+      <p class="setup-hint">Then try capturing again.</p>
+    </div>
   </div>
 
   <div id="settingsView" style="display:none">
@@ -152,6 +160,11 @@ args = ["-y", "figma-developer-mcp", "--stdio"]</code>
         </li>
         <li>
           <strong>Install script</strong> — browser extensions can't talk to local programs directly. The install script registers a native messaging host with your browser and starts a lightweight background service that keeps your AI tool ready to handle captures. This one-time setup lets the extension communicate with the AI tool on your machine.
+          <p class="setup-hint" style="margin:6px 0 2px">Run this in your terminal:</p>
+          <div class="command-row" style="margin-top:4px">
+            <code id="howInstallCommand" class="command"></code>
+            <button id="copyHowInstallBtn" class="copy-btn" title="Copy">Copy</button>
+          </div>
         </li>
       </ol>
     </div>

@@ -26,6 +26,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const settingsBackLink = document.getElementById("settingsBackLink");
   const providerRadios = document.querySelectorAll('input[name="provider"]');
   const providerStatus = document.getElementById("providerStatus");
+  const daemonFix = document.getElementById("daemonFix");
+  const daemonFixCommand = document.getElementById("daemonFixCommand");
+  const copyDaemonFixBtn = document.getElementById("copyDaemonFixBtn");
 
   let closeTimeout = null;
   let previousView = "capture"; // track which view to return to from "how it works"
@@ -50,9 +53,17 @@ document.addEventListener("DOMContentLoaded", () => {
            lower.includes("figma mcp");
   }
 
+  function getInstallCommand() {
+    return `curl -fsSL https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/setup.sh | bash -s -- ${chrome.runtime.id}`;
+  }
+
+  function isDaemonError(msg) {
+    const lower = msg.toLowerCase();
+    return lower.includes("daemon not running") || lower.includes("re-run the install script");
+  }
+
   function showSetup() {
-    const extId = chrome.runtime.id;
-    setupCommand.textContent = `curl -fsSL https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/setup.sh | bash -s -- ${extId}`;
+    setupCommand.textContent = getInstallCommand();
     showView("setup");
   }
 
@@ -72,6 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
     captureBtn.disabled = false;
     captureOptions.style.display = "";
     progress.style.display = "none";
+    daemonFix.style.display = "none";
     // Remove dynamically added DS steps
     progress.querySelectorAll(".step.ds-step").forEach((s) => s.remove());
     steps = progress.querySelectorAll(".step");
@@ -206,6 +218,11 @@ document.addEventListener("DOMContentLoaded", () => {
       resetUI();
       if (isSetupError(msg.error)) {
         showSetup();
+      } else if (isDaemonError(msg.error)) {
+        status.textContent = msg.error;
+        status.className = "error";
+        daemonFixCommand.textContent = getInstallCommand();
+        daemonFix.style.display = "block";
       } else {
         status.textContent = msg.error;
         status.className = "error";
@@ -235,6 +252,13 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
   });
 
+  // Copy daemon fix command
+  copyDaemonFixBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(daemonFixCommand.textContent);
+    copyDaemonFixBtn.textContent = "Copied!";
+    setTimeout(() => { copyDaemonFixBtn.textContent = "Copy"; }, 1500);
+  });
+
   // Copy MCP config (Claude)
   copyMcpBtn.addEventListener("click", () => {
     const mcpConfig = document.getElementById("mcpConfig").textContent;
@@ -249,6 +273,16 @@ document.addEventListener("DOMContentLoaded", () => {
     navigator.clipboard.writeText(mcpConfig);
     copyMcpCodexBtn.textContent = "Copied!";
     setTimeout(() => { copyMcpCodexBtn.textContent = "Copy"; }, 1500);
+  });
+
+  // "How it Works" install command
+  const howInstallCommand = document.getElementById("howInstallCommand");
+  const copyHowInstallBtn = document.getElementById("copyHowInstallBtn");
+  howInstallCommand.textContent = getInstallCommand();
+  copyHowInstallBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(howInstallCommand.textContent);
+    copyHowInstallBtn.textContent = "Copied!";
+    setTimeout(() => { copyHowInstallBtn.textContent = "Copy"; }, 1500);
   });
 
   retryBtn.addEventListener("click", () => {
@@ -367,6 +401,11 @@ document.addEventListener("DOMContentLoaded", () => {
         resetUI();
         if (isSetupError(response.error)) {
           showSetup();
+        } else if (isDaemonError(response.error)) {
+          status.textContent = response.error;
+          status.className = "error";
+          daemonFixCommand.textContent = getInstallCommand();
+          daemonFix.style.display = "block";
         } else {
           status.textContent = response.error;
           status.className = "error";
