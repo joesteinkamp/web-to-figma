@@ -20,6 +20,7 @@ CODEX_PATHS = [
     os.path.expanduser("~/.local/bin/codex"),
     "/usr/local/bin/codex",
     "/opt/homebrew/bin/codex",
+    os.path.expanduser("~/.npm-global/bin/codex"),
 ]
 
 
