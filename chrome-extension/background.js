@@ -183,6 +183,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
+  if (message.action === "set-config") {
+    callNativeHost({ action: "set-config", provider: message.provider })
+      .then((resp) => sendResponse(resp))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (message.action === "detect-provider") {
+    callNativeHost({ action: "detect-provider" })
+      .then((resp) => sendResponse(resp))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (message.action === "capture") {
     sendResponse({ started: true });
     (async () => {

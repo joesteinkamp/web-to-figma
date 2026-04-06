@@ -11,11 +11,13 @@ import json
 import subprocess
 import os
 import sys
-import re
 import logging
-import shutil
 import threading
 import uuid
+
+# Allow importing providers.py from the same directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import providers
 
 PORT = 19615
 LOG_PATH = os.path.expanduser("~/.web-to-figma/daemon.log")
@@ -27,18 +29,6 @@ logging.basicConfig(
     filename=LOG_PATH, level=logging.DEBUG,
     format="%(asctime)s %(levelname)s %(message)s",
 )
-
-
-def find_claude():
-    paths = [
-        os.path.expanduser("~/.local/bin/claude"),
-        "/usr/local/bin/claude",
-        "/opt/homebrew/bin/claude",
-    ]
-    for p in paths:
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return p
-    return shutil.which("claude")
 
 
 def load_skills_context():
@@ -57,9 +47,14 @@ def load_skills_context():
 
 
 def run_ds_capture(msg):
-    claude = find_claude()
-    if not claude:
-        return {"error": "Claude Code not found. Install from https://claude.ai/code"}
+    provider = providers.read_config_provider()
+    if not provider:
+        return {"error": "No AI coding tool found. Install Claude Code or Codex."}
+
+    binary = providers.find_binary(provider)
+    display_name = providers.provider_display_name(provider)
+    if not binary:
+        return {"error": f"{display_name} not found. Install from {providers.provider_install_url(provider)}"}
 
     title = msg.get("title", "Web Capture").replace('"', '\\"')
     file_url = msg.get("fileUrl", "")
@@ -110,16 +105,14 @@ def run_ds_capture(msg):
 
     system_context = load_skills_context()
 
-    cmd = [
-        claude, "-p", prompt,
-        "--output-format", "json",
-        "--allowedTools", allowed_tools,
-        "--permission-mode", "auto",
-        "--max-turns", "40",
-        "--append-system-prompt", system_context,
-    ]
+    cmd = providers.build_command(
+        provider, binary, prompt,
+        allowed_tools=allowed_tools,
+        max_turns=40,
+        system_prompt=system_context,
+    )
 
-    logging.info("Running Claude for DS capture (title=%s)", title)
+    logging.info("Running %s for DS capture (title=%s)", display_name, title)
     try:
         result = subprocess.run(
             cmd,
@@ -128,19 +121,14 @@ def run_ds_capture(msg):
             text=True,
             timeout=600,
         )
-        logging.info("Claude exit code: %s", result.returncode)
-        logging.debug("Claude stdout: %.500s", result.stdout)
+        logging.info("%s exit code: %s", display_name, result.returncode)
+        logging.debug("%s stdout: %.500s", display_name, result.stdout)
 
-        text = result.stdout
-        try:
-            envelope = json.loads(text)
-            text = envelope.get("result") or envelope.get("content") or text
-        except (json.JSONDecodeError, AttributeError):
-            pass
+        text = providers.parse_output(provider, result.stdout)
 
         text_lower = str(text).lower()
         if any(s in text_lower for s in ["auth", "token expired", "unauthorized", "401", "login", "authenticate"]):
-            return {"error": "Figma auth expired. Run 'claude' in your terminal to re-authenticate with Figma."}
+            return {"error": f"Figma auth expired. Run '{provider}' in your terminal to re-authenticate with Figma."}
 
         logging.info("DS capture complete")
         return {"status": "complete"}

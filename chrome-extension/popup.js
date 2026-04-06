@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const captureView = document.getElementById("captureView");
   const setupView = document.getElementById("setupView");
   const howItWorksView = document.getElementById("howItWorksView");
+  const settingsView = document.getElementById("settingsView");
   const footer = document.getElementById("footer");
   const captureBtn = document.getElementById("captureBtn");
   const status = document.getElementById("status");
@@ -10,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const setupCommand = document.getElementById("setupCommand");
   const copyBtn = document.getElementById("copyBtn");
   const copyMcpBtn = document.getElementById("copyMcpBtn");
+  const copyMcpCodexBtn = document.getElementById("copyMcpCodexBtn");
   const retryBtn = document.getElementById("retryBtn");
   const howItWorksLink = document.getElementById("howItWorksLink");
   const howBackLink = document.getElementById("howBackLink");
@@ -20,22 +22,31 @@ document.addEventListener("DOMContentLoaded", () => {
   const captureOptions = document.getElementById("captureOptions");
   const useDesignSystem = document.getElementById("useDesignSystem");
   const dsOptionRow = document.getElementById("dsOptionRow");
+  const settingsBtn = document.getElementById("settingsBtn");
+  const settingsBackLink = document.getElementById("settingsBackLink");
+  const providerRadios = document.querySelectorAll('input[name="provider"]');
+  const providerStatus = document.getElementById("providerStatus");
 
   let closeTimeout = null;
   let previousView = "capture"; // track which view to return to from "how it works"
+  let currentProvider = "auto"; // current provider preference
+  let resolvedProvider = null;  // what auto-detect resolved to
 
   function showView(view) {
     captureView.style.display = view === "capture" ? "block" : "none";
     setupView.style.display = view === "setup" ? "block" : "none";
     howItWorksView.style.display = view === "how" ? "block" : "none";
-    footer.style.display = view === "how" ? "none" : "block";
+    settingsView.style.display = view === "settings" ? "block" : "none";
+    footer.style.display = (view === "how" || view === "settings") ? "none" : "block";
   }
 
   function isSetupError(msg) {
     const lower = msg.toLowerCase();
     return lower.includes("native messaging host not found") ||
            lower.includes("native host has exited") ||
+           lower.includes("no ai coding tool found") ||
            lower.includes("claude code not found") ||
+           lower.includes("codex not found") ||
            lower.includes("figma mcp");
   }
 
@@ -98,9 +109,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function providerDisplayName(provider) {
+    return { claude: "Claude Code", codex: "Codex" }[provider] || provider;
+  }
+
   function addDesignSystemSteps() {
-    // Relabel static steps for DS mode
-    const relabel = { 1: "Connecting to Claude Code", 2: "Connecting to Figma", 3: "Searching design system" };
+    const name = providerDisplayName(resolvedProvider || "claude");
+    const relabel = { 1: `Connecting to ${name}`, 2: "Connecting to Figma", 3: "Searching design system" };
     progress.querySelectorAll(".step").forEach((s) => {
       const n = parseInt(s.dataset.step);
       if (relabel[n]) s.querySelector(".step-text").textContent = relabel[n];
@@ -119,6 +134,69 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     steps = progress.querySelectorAll(".step");
   }
+
+  // --- Settings ---
+
+  function updateProviderStatus() {
+    if (resolvedProvider) {
+      providerStatus.textContent = `Active: ${providerDisplayName(resolvedProvider)}`;
+      providerStatus.className = "settings-status detected";
+    } else {
+      providerStatus.textContent = "No AI tool detected";
+      providerStatus.className = "settings-status not-detected";
+    }
+  }
+
+  function detectProvider() {
+    chrome.runtime.sendMessage({ action: "detect-provider" }, (resp) => {
+      if (chrome.runtime.lastError || !resp) return;
+      resolvedProvider = resp.resolved || null;
+      currentProvider = resp.provider || "auto";
+      // Set radio to match
+      providerRadios.forEach((r) => { r.checked = r.value === currentProvider; });
+      updateProviderStatus();
+    });
+  }
+
+  settingsBtn.addEventListener("click", () => {
+    previousView = captureView.style.display !== "none" ? "capture" : "setup";
+    showView("settings");
+    detectProvider();
+  });
+
+  settingsBackLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (previousView === "setup") showSetup();
+    else showCapture();
+  });
+
+  providerRadios.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const value = radio.value;
+      currentProvider = value;
+      chrome.storage.local.set({ provider: value });
+      // Persist to native host config file
+      chrome.runtime.sendMessage({ action: "set-config", provider: value }, (resp) => {
+        if (chrome.runtime.lastError) return;
+        if (resp?.resolved) {
+          resolvedProvider = resp.resolved;
+          updateProviderStatus();
+        }
+      });
+    });
+  });
+
+  // --- MCP tab switching in How it Works ---
+
+  document.querySelectorAll(".mcp-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".mcp-tab").forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".mcp-tab-content").forEach((c) => c.classList.remove("active"));
+      tab.classList.add("active");
+      const target = document.getElementById(tab.dataset.tab);
+      if (target) target.classList.add("active");
+    });
+  });
 
   // Listen for progress broadcasts from background
   chrome.runtime.onMessage.addListener((msg) => {
@@ -157,12 +235,20 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
   });
 
-  // Copy MCP config
+  // Copy MCP config (Claude)
   copyMcpBtn.addEventListener("click", () => {
     const mcpConfig = document.getElementById("mcpConfig").textContent;
     navigator.clipboard.writeText(mcpConfig);
     copyMcpBtn.textContent = "Copied!";
     setTimeout(() => { copyMcpBtn.textContent = "Copy"; }, 1500);
+  });
+
+  // Copy MCP config (Codex)
+  copyMcpCodexBtn.addEventListener("click", () => {
+    const mcpConfig = document.getElementById("mcpConfigCodex").textContent;
+    navigator.clipboard.writeText(mcpConfig);
+    copyMcpCodexBtn.textContent = "Copied!";
+    setTimeout(() => { copyMcpCodexBtn.textContent = "Copy"; }, 1500);
   });
 
   retryBtn.addEventListener("click", () => {
@@ -220,15 +306,22 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Restore saved state
-  chrome.storage.local.get(["saveToExisting", "fileUrl", "useDesignSystem"], (data) => {
+  chrome.storage.local.get(["saveToExisting", "fileUrl", "useDesignSystem", "provider"], (data) => {
     if (data.saveToExisting) {
       saveToExisting.checked = true;
       fileUrlGroup.style.display = "block";
     }
     if (data.fileUrl) fileUrlInput.value = data.fileUrl;
     if (data.useDesignSystem) useDesignSystem.checked = true;
+    if (data.provider) {
+      currentProvider = data.provider;
+      providerRadios.forEach((r) => { r.checked = r.value === currentProvider; });
+    }
     updateDsVisibility();
   });
+
+  // Initial provider detection (for step labels)
+  detectProvider();
 
   function isValidFigmaUrl(url) {
     return /^https:\/\/(www\.)?figma\.com\/(design|file)\//.test(url);
