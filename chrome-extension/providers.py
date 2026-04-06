@@ -76,9 +76,11 @@ def write_config(provider):
 def build_command(provider, binary, prompt, allowed_tools=None, max_turns=5, system_prompt=None):
     """Build the subprocess command list for the given provider."""
     if provider == "codex":
-        cmd = [binary, "exec", prompt, "--json", "--full-auto"]
+        # Global flags (like --full-auto) must precede the exec subcommand
+        cmd = [binary, "--full-auto"]
         if system_prompt:
             cmd += ["--append-system-prompt", system_prompt]
+        cmd += ["exec", "--json", prompt]
         return cmd
 
     # Claude Code
@@ -117,7 +119,13 @@ def _parse_claude_output(stdout):
 
 
 def _parse_codex_output(stdout):
-    """Parse Codex JSONL output. Extract text content from events."""
+    """Parse Codex JSONL output. Extract text content from events.
+
+    Codex exec --json emits JSONL with these relevant event types:
+      - item.completed with item.type "agent_message" → final text answer
+      - item.completed with item.type "mcp_tool_call" → MCP tool result
+      - turn.completed → usage stats (ignored)
+    """
     texts = []
     for line in stdout.strip().splitlines():
         line = line.strip()
@@ -128,33 +136,30 @@ def _parse_codex_output(stdout):
         except json.JSONDecodeError:
             continue
 
-        # Extract content from message events
         etype = event.get("type", "")
 
-        # Handle output_text events directly
-        if etype == "response.output_text.done":
-            text = event.get("text", "")
-            if text:
-                texts.append(text)
-            continue
+        if etype == "item.completed":
+            item = event.get("item", {})
+            item_type = item.get("type", "")
 
-        # Handle content parts in items
-        if etype in ("response.output_item.done", "item.done"):
-            item = event.get("item", event)
-            for content in item.get("content", []):
-                if content.get("type") == "output_text":
-                    texts.append(content.get("text", ""))
-                elif content.get("type") == "text":
-                    texts.append(content.get("text", ""))
-            continue
+            # Agent's text response
+            if item_type == "agent_message":
+                text = item.get("text", "")
+                if text:
+                    texts.append(text)
 
-        # Handle completed responses
-        if etype == "response.completed":
-            resp = event.get("response", {})
-            for output in resp.get("output", []):
-                for content in output.get("content", []):
-                    if content.get("type") in ("output_text", "text"):
-                        texts.append(content.get("text", ""))
+            # MCP tool call result — extract text from result content
+            elif item_type == "mcp_tool_call":
+                result = item.get("result")
+                if result:
+                    # result.content is an array of content blocks
+                    for block in result.get("content", []):
+                        if block.get("type") == "text":
+                            texts.append(block.get("text", ""))
+                    # Also check structured_content
+                    sc = result.get("structured_content")
+                    if sc and isinstance(sc, dict):
+                        texts.append(json.dumps(sc))
 
     return "\n".join(texts) if texts else stdout
 

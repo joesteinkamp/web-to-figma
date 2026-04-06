@@ -125,7 +125,7 @@ def handle_generate_capture(message):
         max_turns=5,
     )
 
-    logging.info("Running: %s ... (timeout=90)", binary)
+    logging.info("Running command: %s", " ".join(cmd[:5]) + " ...")
     result = subprocess.run(
         cmd,
         stdin=subprocess.DEVNULL,
@@ -134,11 +134,12 @@ def handle_generate_capture(message):
         timeout=90,
     )
     logging.info("%s exit code: %s", display_name, result.returncode)
-    logging.debug("%s stdout: %.500s", display_name, result.stdout)
+    logging.debug("%s stdout (full): %s", display_name, result.stdout)
     if result.stderr:
-        logging.debug("%s stderr: %.500s", display_name, result.stderr)
+        logging.debug("%s stderr: %.1000s", display_name, result.stderr)
 
     text = providers.parse_output(provider, result.stdout)
+    logging.debug("Parsed output: %s", text)
 
     # Check for auth errors
     text_lower = str(text).lower()
