@@ -41,6 +41,7 @@ fi
 # --- Check prerequisites ---
 
 MISSING_PREREQS=()
+HAS_AI_TOOL=false
 
 # Find python3
 PYTHON=""
@@ -60,23 +61,70 @@ echo "  ✓ Python 3 found ($PYTHON)"
 # Claude Code CLI
 CLAUDE_CMD=$(command -v claude 2>/dev/null || true)
 if [ -z "$CLAUDE_CMD" ]; then
-  echo "  ✗ Claude Code CLI not found"
-  echo "    Install it with:  npm install -g @anthropic-ai/claude-code"
-  echo "    More info: https://docs.anthropic.com/en/docs/claude-code"
-  MISSING_PREREQS+=("Claude Code")
+  echo "  - Claude Code CLI not found (optional)"
 else
   echo "  ✓ Claude Code found ($CLAUDE_CMD)"
+  HAS_AI_TOOL=true
 fi
 
-# Figma MCP server
-SETTINGS_FILE="$HOME/.claude/settings.json"
-if [ -f "$SETTINGS_FILE" ] && grep -q "figma" "$SETTINGS_FILE" 2>/dev/null; then
-  echo "  ✓ Figma MCP server configured"
+# Codex CLI
+CODEX_CMD=$(command -v codex 2>/dev/null || true)
+if [ -z "$CODEX_CMD" ]; then
+  echo "  - Codex CLI not found (optional)"
 else
-  echo "  ✗ Figma MCP server not found in Claude Code settings"
-  echo "    Add this to $SETTINGS_FILE:"
-  echo '    {"mcpServers":{"figma":{"command":"npx","args":["-y","figma-developer-mcp","--stdio"]}}}'
-  echo "    Then restart Claude Code and follow the Figma auth prompts."
+  echo "  ✓ Codex found ($CODEX_CMD)"
+  HAS_AI_TOOL=true
+fi
+
+if [ "$HAS_AI_TOOL" = false ]; then
+  echo ""
+  echo "  ✗ No AI coding tool found. Install at least one:"
+  echo "    Claude Code: npm install -g @anthropic-ai/claude-code"
+  echo "      More info: https://docs.anthropic.com/en/docs/claude-code"
+  echo "    Codex:       npm install -g @openai/codex"
+  echo "      More info: https://github.com/openai/codex"
+  MISSING_PREREQS+=("AI coding tool (Claude Code or Codex)")
+fi
+
+# Figma MCP server — check both Claude and Codex configs
+FIGMA_MCP_FOUND=false
+
+if [ -n "$CLAUDE_CMD" ]; then
+  # Claude Code stores MCP config in either location
+  CLAUDE_SETTINGS=""
+  for f in "$HOME/.claude/settings.json" "$HOME/.claude.json"; do
+    if [ -f "$f" ] && grep -q "figma" "$f" 2>/dev/null; then
+      CLAUDE_SETTINGS="$f"
+      break
+    fi
+  done
+  if [ -n "$CLAUDE_SETTINGS" ]; then
+    echo "  ✓ Figma MCP configured in Claude Code ($CLAUDE_SETTINGS)"
+    FIGMA_MCP_FOUND=true
+  else
+    echo "  - Figma MCP not found in Claude Code settings"
+    echo "    Add this to ~/.claude/settings.json (or ~/.claude.json):"
+    echo '    {"mcpServers":{"figma":{"command":"npx","args":["-y","figma-developer-mcp","--stdio"]}}}'
+  fi
+fi
+
+if [ -n "$CODEX_CMD" ]; then
+  CODEX_CONFIG="$HOME/.codex/config.toml"
+  if [ -f "$CODEX_CONFIG" ] && grep -q "figma" "$CODEX_CONFIG" 2>/dev/null; then
+    echo "  ✓ Figma MCP configured in Codex"
+    FIGMA_MCP_FOUND=true
+  else
+    echo "  - Figma MCP not found in Codex config"
+    echo "    Add this to $CODEX_CONFIG:"
+    echo '    [mcp_servers.figma]'
+    echo '    command = "npx"'
+    echo '    args = ["-y", "figma-developer-mcp", "--stdio"]'
+  fi
+fi
+
+if [ "$HAS_AI_TOOL" = true ] && [ "$FIGMA_MCP_FOUND" = false ]; then
+  echo ""
+  echo "  ✗ Figma MCP server not configured in any AI tool"
   MISSING_PREREQS+=("Figma MCP")
 fi
 
@@ -88,6 +136,7 @@ if [ "$FROM_REPO" = true ]; then
   echo "Copying files from repo..."
   cp "$SCRIPT_DIR/host-wrapper.sh" "$INSTALL_DIR/host-wrapper.sh"
   cp "$SCRIPT_DIR/host.py" "$INSTALL_DIR/host.py"
+  cp "$SCRIPT_DIR/providers.py" "$INSTALL_DIR/providers.py"
   cp "$SCRIPT_DIR/ds-daemon.py" "$INSTALL_DIR/ds-daemon.py"
   cp "$SCRIPT_DIR/com.web_to_figma.ds.plist" "$INSTALL_DIR/com.web_to_figma.ds.plist"
   cp -r "$SCRIPT_DIR/skills" "$INSTALL_DIR/skills" 2>/dev/null || true
@@ -95,6 +144,7 @@ else
   echo "Downloading files..."
   curl -fsSL "$REPO_URL/host-wrapper.sh" -o "$INSTALL_DIR/host-wrapper.sh"
   curl -fsSL "$REPO_URL/host.py" -o "$INSTALL_DIR/host.py"
+  curl -fsSL "$REPO_URL/providers.py" -o "$INSTALL_DIR/providers.py"
   curl -fsSL "$REPO_URL/ds-daemon.py" -o "$INSTALL_DIR/ds-daemon.py"
   curl -fsSL "$REPO_URL/com.web_to_figma.ds.plist" -o "$INSTALL_DIR/com.web_to_figma.ds.plist"
   mkdir -p "$INSTALL_DIR/skills"
@@ -106,12 +156,18 @@ fi
 chmod +x "$INSTALL_DIR/host-wrapper.sh" "$INSTALL_DIR/ds-daemon.py"
 HOST_SCRIPT="$INSTALL_DIR/host-wrapper.sh"
 
+# Create default config if it doesn't exist
+if [ ! -f "$INSTALL_DIR/config.json" ]; then
+  echo '{"provider": "auto"}' > "$INSTALL_DIR/config.json"
+  echo "  ✓ Default config created (auto-detect provider)"
+fi
+
 # --- Native messaging manifests ---
 
 MANIFEST=$(cat <<EOF
 {
   "name": "$HOST_NAME",
-  "description": "Web to Figma — invokes Claude Code for Figma capture",
+  "description": "Web to Figma — invokes AI coding tools for Figma capture",
   "path": "$HOST_SCRIPT",
   "type": "stdio",
   "allowed_origins": [

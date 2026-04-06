@@ -5,7 +5,10 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>Web to Figma</h1>
+  <div id="headerRow">
+    <h1>Web to Figma</h1>
+    <button id="settingsBtn" class="icon-btn" title="Settings">&#9881;</button>
+  </div>
 
   <div id="captureView">
     <div id="captureOptions">
@@ -18,9 +21,9 @@
         <label class="option-row sub-option" id="dsOptionRow" style="display:none">
           <input type="checkbox" id="useDesignSystem">
           <span>Use design system components &amp; variables</span>
-          <span class="info-icon" id="dsInfoIcon">ⓘ</span>
+          <span class="info-icon" id="dsInfoIcon">&#9432;</span>
           <div class="tooltip" id="dsTooltip">
-            <p><strong>Design System Capture</strong> — slower and less precise to standard capture, but maps elements to your actual components (buttons, inputs, cards, etc.) from the linked Figma file. Produces a more editable result that follows your design tokens. May contain layout or matching errors since Claude is interpreting the page. Takes longer as it analyzes and matches each element.</p>
+            <p><strong>Design System Capture</strong> — slower and less precise to standard capture, but maps elements to your actual components (buttons, inputs, cards, etc.) from the linked Figma file. Produces a more editable result that follows your design tokens. May contain layout or matching errors since the AI agent is interpreting the page. Takes longer as it analyzes and matches each element.</p>
           </div>
         </label>
       </div>
@@ -29,7 +32,7 @@
     <div id="progress" style="display:none">
       <div class="step" data-step="1">
         <span class="step-icon">*</span>
-        <span class="step-text">Sending page to Claude Code</span>
+        <span class="step-text">Sending page to AI agent</span>
         <span class="step-dots"></span>
       </div>
       <div class="step" data-step="2">
@@ -44,12 +47,43 @@
       </div>
     </div>
     <div id="status"></div>
+    <div id="daemonFix" style="display:none">
+      <p class="setup-text">Run this in your terminal to restart the background service:</p>
+      <div class="command-row">
+        <code id="daemonFixCommand" class="command"></code>
+        <button id="copyDaemonFixBtn" class="copy-btn" title="Copy">Copy</button>
+      </div>
+      <p class="setup-hint">Then try capturing again.</p>
+    </div>
+  </div>
+
+  <div id="settingsView" style="display:none">
+    <a href="#" id="settingsBackLink" class="back-link">&larr; Back</a>
+    <div class="settings-section">
+      <p class="settings-heading">AI Provider</p>
+      <p class="settings-detail">Choose which AI coding tool powers the capture.</p>
+      <div class="radio-group">
+        <label class="radio-row">
+          <input type="radio" name="provider" value="auto" checked>
+          <span>Auto-detect <span class="radio-hint">(recommended)</span></span>
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="provider" value="claude">
+          <span>Claude Code</span>
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="provider" value="codex">
+          <span>Codex</span>
+        </label>
+      </div>
+      <p id="providerStatus" class="settings-status"></p>
+    </div>
   </div>
 
   <div id="setupView" style="display:none">
     <div class="setup-prereqs">
       <p class="setup-heading">Before you start</p>
-      <p class="setup-detail">This extension requires <strong>Claude Code</strong> and the <strong>Figma MCP server</strong> to be installed and configured. <a href="#" id="setupLearnMore">Learn more</a></p>
+      <p class="setup-detail">This extension requires an AI coding tool (<strong>Claude Code</strong> or <strong>Codex</strong>) and the <strong>Figma MCP server</strong> to be installed and configured. <a href="#" id="setupLearnMore">Learn more</a></p>
     </div>
     <p class="setup-text">Run this in your terminal to connect the extension:</p>
     <div class="command-row">
@@ -72,8 +106,8 @@
       <p class="how-heading">How it works</p>
       <ol class="how-steps">
         <li>You click <strong>Capture to Figma</strong> on any page</li>
-        <li>The extension calls <strong>Claude Code</strong> via a local native host</li>
-        <li>Claude Code calls the <strong>Figma MCP server</strong> to start a capture session</li>
+        <li>The extension calls your AI coding tool (<strong>Claude Code</strong> or <strong>Codex</strong>) via a local native host</li>
+        <li>The AI tool calls the <strong>Figma MCP server</strong> to start a capture session</li>
         <li>A Figma overlay appears on the page — select what to capture</li>
         <li>Figma processes the capture and creates an editable design file</li>
       </ol>
@@ -83,14 +117,26 @@
       <p class="how-heading">Requirements</p>
       <ol class="how-reqs">
         <li>
-          <strong>Claude Code</strong> — the CLI must be installed and available as <code>claude</code> in your terminal.
-          <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">Install Claude Code &rarr;</a>
+          <strong>AI coding tool</strong> — install at least one:
+          <ul class="how-sub-reqs">
+            <li><strong>Claude Code</strong> — <code>claude</code> CLI.
+              <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener">Install &rarr;</a>
+            </li>
+            <li><strong>Codex</strong> — <code>codex</code> CLI.
+              <a href="https://github.com/openai/codex" target="_blank" rel="noopener">Install &rarr;</a>
+            </li>
+          </ul>
         </li>
         <li>
-          <strong>Figma MCP server</strong> — must be added to your Claude Code config.
-          Add this to <code>~/.claude/settings.json</code>:
-          <div class="command-row" style="margin-top:6px">
-            <code id="mcpConfig" class="command mcp-config">{
+          <strong>Figma MCP server</strong> — must be configured in your AI tool.
+          <div class="mcp-tabs">
+            <span class="mcp-tab active" data-tab="claude-mcp">Claude Code</span>
+            <span class="mcp-tab" data-tab="codex-mcp">Codex</span>
+          </div>
+          <div id="claude-mcp" class="mcp-tab-content active">
+            <p class="setup-hint" style="margin:4px 0 2px">Add to <code>~/.claude/settings.json</code> or <code>~/.claude.json</code>:</p>
+            <div class="command-row" style="margin-top:4px">
+              <code id="mcpConfig" class="command mcp-config">{
   "mcpServers": {
     "figma": {
       "command": "npx",
@@ -98,12 +144,27 @@
     }
   }
 }</code>
-            <button id="copyMcpBtn" class="copy-btn" title="Copy">Copy</button>
+              <button id="copyMcpBtn" class="copy-btn" title="Copy">Copy</button>
+            </div>
           </div>
-          <p class="setup-hint" style="margin-top:4px">Then restart Claude Code and follow the Figma auth prompts.</p>
+          <div id="codex-mcp" class="mcp-tab-content">
+            <p class="setup-hint" style="margin:4px 0 2px">Add to <code>~/.codex/config.toml</code>:</p>
+            <div class="command-row" style="margin-top:4px">
+              <code id="mcpConfigCodex" class="command mcp-config">[mcp_servers.figma]
+command = "npx"
+args = ["-y", "figma-developer-mcp", "--stdio"]</code>
+              <button id="copyMcpCodexBtn" class="copy-btn" title="Copy">Copy</button>
+            </div>
+          </div>
+          <p class="setup-hint" style="margin-top:4px">Then restart your AI tool and follow the Figma auth prompts.</p>
         </li>
         <li>
-          <strong>Install script</strong> — browser extensions can't talk to local programs directly. The install script registers a native messaging host with your browser and starts a lightweight background service that keeps Claude Code ready to handle captures. This one-time setup lets the extension communicate with Claude Code on your machine.
+          <strong>Install script</strong> — browser extensions can't talk to local programs directly. The install script registers a native messaging host with your browser and starts a lightweight background service that keeps your AI tool ready to handle captures. This one-time setup lets the extension communicate with the AI tool on your machine.
+          <p class="setup-hint" style="margin:6px 0 2px">Run this in your terminal:</p>
+          <div class="command-row" style="margin-top:4px">
+            <code id="howInstallCommand" class="command"></code>
+            <button id="copyHowInstallBtn" class="copy-btn" title="Copy">Copy</button>
+          </div>
         </li>
       </ol>
     </div>
