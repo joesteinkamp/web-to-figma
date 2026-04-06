@@ -11,7 +11,8 @@ set -e
 
 HOST_NAME="com.web_to_figma.capture"
 INSTALL_DIR="$HOME/.web-to-figma"
-REPO_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/main/chrome-extension"
+BRANCH="${WTF_BRANCH:-main}"
+REPO_URL="https://raw.githubusercontent.com/joesteinkamp/web-to-figma/$BRANCH/chrome-extension"
 
 # Detect whether we're running from the repo or via curl
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
