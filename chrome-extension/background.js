@@ -96,6 +96,139 @@ async function capturePageStructure(tabId) {
   return structResult?.result || [];
 }
 
+// CSS properties to inline when flattening iframe DOM content.
+const INLINE_STYLE_PROPERTIES = [
+  "display", "position", "width", "height", "min-width", "min-height",
+  "max-width", "max-height", "margin", "padding", "box-sizing", "overflow",
+  "top", "right", "bottom", "left", "z-index", "float", "clear",
+  "vertical-align",
+  "flex-direction", "flex-wrap", "align-items", "justify-content", "gap",
+  "flex-grow", "flex-shrink", "flex-basis", "align-self", "order",
+  "grid-template-columns", "grid-template-rows", "grid-column", "grid-row",
+  "font-family", "font-size", "font-weight", "font-style", "line-height",
+  "text-align", "text-decoration", "text-transform", "letter-spacing",
+  "white-space", "word-break", "color",
+  "background-color", "background-image", "background-size",
+  "background-position", "background-repeat", "border", "border-radius",
+  "box-shadow", "opacity", "outline", "text-shadow", "transform",
+  "visibility",
+];
+
+/**
+ * Flatten iframe content into the parent page before Figma capture.
+ * Uses chrome.webNavigation to enumerate frames, then chrome.scripting to
+ * extract each iframe's DOM with inlined computed styles, and finally replaces
+ * each <iframe> in the parent page with the extracted content.
+ */
+async function flattenIframesForCapture(tabId) {
+  // Get all frames in the tab
+  let frames;
+  try {
+    frames = await chrome.webNavigation.getAllFrames({ tabId });
+  } catch {
+    return; // webNavigation not available — skip
+  }
+
+  // Filter to child frames only (exclude the main frame, frameId 0)
+  const childFrames = frames.filter((f) => f.frameId !== 0 && f.url && f.url !== "about:blank");
+  if (childFrames.length === 0) return;
+
+  console.log(`[iframe-flatten] Found ${childFrames.length} child frame(s)`);
+
+  // Collect iframe bounding rects from the main frame so we can match them
+  // to child frames by src URL.
+  const [iframeInfo] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const iframes = document.querySelectorAll("iframe");
+      return Array.from(iframes).map((iframe, idx) => {
+        const rect = iframe.getBoundingClientRect();
+        return {
+          idx,
+          src: iframe.src || "",
+          width: rect.width,
+          height: rect.height,
+          visible: rect.width > 0 && rect.height > 0,
+        };
+      });
+    },
+    world: "MAIN",
+  });
+
+  const iframeRects = iframeInfo?.result || [];
+  if (iframeRects.length === 0) return;
+
+  // For each child frame, extract its DOM with inlined styles
+  const extractions = []; // { idx, html }
+
+  for (const childFrame of childFrames) {
+    // Match to an iframe element by URL
+    const match = iframeRects.find(
+      (r) => r.visible && r.src && childFrame.url.startsWith(r.src.split("#")[0])
+    );
+    if (!match) continue;
+
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [childFrame.frameId] },
+        func: (props) => {
+          const MAX_DEPTH = 50;
+          function inlineStyles(el, depth) {
+            if (depth > MAX_DEPTH || el.nodeType !== 1) return;
+            const computed = window.getComputedStyle(el);
+            for (const prop of props) {
+              const value = computed.getPropertyValue(prop);
+              if (value) el.style.setProperty(prop, value);
+            }
+            const base = document.baseURI;
+            if (el.tagName === "IMG" && el.getAttribute("src")) {
+              try { el.src = new URL(el.getAttribute("src"), base).href; } catch {}
+            }
+            if (el.tagName === "A" && el.getAttribute("href")) {
+              try { el.href = new URL(el.getAttribute("href"), base).href; } catch {}
+            }
+            for (const child of el.children) inlineStyles(child, depth + 1);
+          }
+          if (!document.body) return null;
+          inlineStyles(document.body, 0);
+          return document.body.innerHTML;
+        },
+        args: [INLINE_STYLE_PROPERTIES],
+        world: "MAIN",
+      });
+
+      if (result?.result) {
+        extractions.push({ idx: match.idx, html: result.result, width: match.width, height: match.height });
+      }
+    } catch (err) {
+      console.log(`[iframe-flatten] Failed to extract frame ${childFrame.frameId}: ${err.message}`);
+    }
+  }
+
+  if (extractions.length === 0) return;
+
+  // Replace iframes in the parent page with the extracted content
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (items) => {
+      const iframes = document.querySelectorAll("iframe");
+      // Process in reverse order so indices remain valid
+      for (const { idx, html, width, height } of [...items].sort((a, b) => b.idx - a.idx)) {
+        const iframe = iframes[idx];
+        if (!iframe) continue;
+        const container = document.createElement("div");
+        container.style.cssText = `all:initial;display:block;width:${width}px;height:${height}px;overflow:hidden;`;
+        container.innerHTML = html;
+        iframe.parentNode.replaceChild(container, iframe);
+      }
+    },
+    args: [extractions],
+    world: "MAIN",
+  });
+
+  console.log(`[iframe-flatten] Replaced ${extractions.length} iframe(s) with flattened DOM`);
+}
+
 async function handleCapture(tab, options = {}) {
   const dsMode = options.useDesignSystem || false;
   totalSteps = dsMode ? 6 : 3;
@@ -130,6 +263,11 @@ async function handleCapture(tab, options = {}) {
       title: tab.title || "Web Capture",
     };
     if (options.fileUrl) hostMsg.fileUrl = options.fileUrl;
+
+    // Flatten iframe content into parent DOM before capture
+    await flattenIframesForCapture(tab.id).catch((err) =>
+      console.log(`[iframe-flatten] Skipped: ${err.message}`)
+    );
 
     const workDone = Promise.all([
       callNativeHost(hostMsg),
