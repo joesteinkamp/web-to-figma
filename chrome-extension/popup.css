@@ -81,6 +81,55 @@
   --popup-width: 320px;
   --tooltip-width: 260px;
   --step-icon-size: 14px;
+
+  /* Colors: Background */
+  --color-bg: #ffffff;
+  --color-input-bg: #ffffff;
+
+  /* Let the browser style built-in UI (scrollbars, form controls) per theme */
+  color-scheme: light dark;
+}
+
+/* Dark mode overrides — follows the OS/browser setting */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Colors: Brand */
+    --color-primary: #b57aff;
+    --color-primary-hover: #c99dff;
+    --color-primary-surface: #2a1f3d;
+    --color-primary-border: #3d2d5e;
+    --color-on-primary: #1a1a1a;
+
+    /* Colors: Semantic */
+    --color-success: #22c55e;
+    --color-error: #f87171;
+    --color-disabled: #3a3a3a;
+
+    /* Colors: Text */
+    --color-text: #e6e6e6;
+    --color-text-strong: #f0f0f0;
+    --color-text-secondary: #b4b4b4;
+    --color-text-muted: #888888;
+    --color-text-disabled: #666666;
+    --color-text-placeholder: #666666;
+    --color-text-muted-hover: #aaaaaa;
+
+    /* Colors: Surface & Border */
+    --color-surface: #2a2a2a;
+    --color-border: #3a3a3a;
+    --color-border-light: #2e2e2e;
+
+    /* Colors: Tooltip (inverted so it still pops against the dark UI) */
+    --color-tooltip-bg: #f0f0f0;
+    --color-tooltip-text: #1a1a1a;
+
+    /* Shadows */
+    --shadow-tooltip: 0 4px 12px rgba(0, 0, 0, 0.6);
+
+    /* Colors: Background */
+    --color-bg: #1e1e1e;
+    --color-input-bg: #2a2a2a;
+  }
 }
 
 /* ==========================================================================
@@ -93,6 +142,7 @@ body {
   font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
   color: var(--color-text);
+  background: var(--color-bg);
   margin: 0;
 }
 
@@ -476,6 +526,8 @@ button:disabled {
   padding: var(--space-2);
   font-size: var(--font-size-xs);
   font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-input-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   box-sizing: border-box;
