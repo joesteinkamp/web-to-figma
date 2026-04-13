@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const daemonFix = document.getElementById("daemonFix");
   const daemonFixCommand = document.getElementById("daemonFixCommand");
   const copyDaemonFixBtn = document.getElementById("copyDaemonFixBtn");
+  const managedProfileError = document.getElementById("managedProfileError");
 
   let closeTimeout = null;
   let previousView = "capture"; // track which view to return to from "how it works"
@@ -62,6 +63,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return lower.includes("daemon not running") || lower.includes("re-run the install script");
   }
 
+  function isManagedProfileError(msg) {
+    const lower = msg.toLowerCase();
+    return lower.includes("access to the specified native messaging host is forbidden");
+  }
+
   function showSetup() {
     setupCommand.textContent = getInstallCommand();
     showView("setup");
@@ -84,6 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
     captureOptions.style.display = "";
     progress.style.display = "none";
     daemonFix.style.display = "none";
+    managedProfileError.style.display = "none";
     // Remove dynamically added DS steps
     progress.querySelectorAll(".step.ds-step").forEach((s) => s.remove());
     steps = progress.querySelectorAll(".step");
@@ -223,6 +230,8 @@ document.addEventListener("DOMContentLoaded", () => {
         status.className = "error";
         daemonFixCommand.textContent = getInstallCommand();
         daemonFix.style.display = "block";
+      } else if (isManagedProfileError(msg.error)) {
+        managedProfileError.style.display = "block";
       } else {
         status.textContent = msg.error;
         status.className = "error";
