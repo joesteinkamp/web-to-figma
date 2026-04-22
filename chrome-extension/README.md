@@ -36,6 +36,21 @@ One-click capture of any webpage to Figma.
 4. Extension injects Figma's capture script and calls `captureForDesign()`
 5. The design appears in your Figma drafts
 
+## Building for the Chrome Web Store
+
+From the repo root:
+
+```
+npm run build:extension
+```
+
+This produces:
+
+- `dist/chrome-extension/` — only the files Chrome loads (manifest, popup, background, icons), validated against `manifest.json`
+- `dist/web-to-figma-v<version>.zip` — ready to upload to the Chrome Web Store dashboard
+
+The native host files (`host.py`, `providers.py`, `ds-daemon.py`, etc.) are intentionally excluded — Chrome cannot execute them, and they are installed separately onto the user's machine by `setup.sh`.
+
 ## Architecture: Why Python for the Native Host?
 
 The native messaging host (`host.py`) is written in Python rather than Node.js, despite Node.js already being a dependency via Claude Code CLI. This is intentional.

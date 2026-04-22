@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "capture": "node capture-server.js",
-    "setup": "npx playwright install chromium"
+    "setup": "npx playwright install chromium",
+    "build:extension": "node scripts/build-extension.mjs"
   },
   "dependencies": {
     "express": "^4.21.0",
