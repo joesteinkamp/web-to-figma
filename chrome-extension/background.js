@@ -290,21 +290,41 @@ async function handleCapture(tab, options = {}) {
 
     const [{ captureId, endpoint }] = await workDone;
 
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: (cid, ep) => {
-        if (!window.figma || !window.figma.captureForDesign) {
-          throw new Error("Figma capture script did not initialize");
-        }
-        window.figma.captureForDesign({
-          captureId: cid,
-          endpoint: ep,
-          selector: "body",
+    let attempts = 3;
+    let lastError = null;
+
+    while (attempts > 0) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: async (cid, ep) => {
+            if (!window.figma || !window.figma.captureForDesign) {
+              throw new Error("Figma capture script did not initialize");
+            }
+            await window.figma.captureForDesign({
+              captureId: cid,
+              endpoint: ep,
+              selector: "body",
+            });
+          },
+          args: [captureId, endpoint],
+          world: "MAIN",
         });
-      },
-      args: [captureId, endpoint],
-      world: "MAIN",
-    });
+        lastError = null;
+        break; // Success
+      } catch (err) {
+        lastError = err;
+        attempts--;
+        if (attempts > 0) {
+          console.warn(`Figma capture failed, retrying... (${attempts} left)`, err);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    }
+
+    if (lastError) {
+      throw new Error(`Figma capture failed: ${lastError.message}`);
+    }
 
     sendProgress(3);
   }
