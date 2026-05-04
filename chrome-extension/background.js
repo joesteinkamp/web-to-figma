@@ -4,6 +4,20 @@ const DS_DAEMON_URL = "http://localhost:19615";
 let captureState = { active: false, step: 0, dsMode: false };
 let totalSteps = 3;
 
+const CAPTURE_SCRIPT_FETCH_TIMEOUT_MS = 30000;
+const CAPTURE_FOR_DESIGN_TIMEOUT_MS = 60000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function sendProgress(step, error) {
   captureState = { active: !error && step < totalSteps, step, error: error || null, dsMode: captureState.dsMode };
   chrome.runtime.sendMessage({ action: "capture-progress", step, error: error || null, dsMode: captureState.dsMode }).catch(() => {});
@@ -271,18 +285,24 @@ async function handleCapture(tab, options = {}) {
 
     const workDone = Promise.all([
       callNativeHost(hostMsg),
-      fetch("https://mcp.figma.com/mcp/html-to-design/capture.js")
-        .then((r) => { if (!r.ok) throw new Error("Failed to fetch Figma capture script"); return r.text(); })
-        .then((scriptText) => chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: (code) => {
-            const el = document.createElement("script");
-            el.textContent = code;
-            document.head.appendChild(el);
-          },
-          args: [scriptText],
-          world: "MAIN",
-        })),
+      withTimeout(
+        fetch("https://mcp.figma.com/mcp/html-to-design/capture.js", {
+          signal: AbortSignal.timeout(CAPTURE_SCRIPT_FETCH_TIMEOUT_MS),
+        })
+          .then((r) => { if (!r.ok) throw new Error("Failed to fetch Figma capture script"); return r.text(); })
+          .then((scriptText) => chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: (code) => {
+              const el = document.createElement("script");
+              el.textContent = code;
+              document.head.appendChild(el);
+            },
+            args: [scriptText],
+            world: "MAIN",
+          })),
+        CAPTURE_SCRIPT_FETCH_TIMEOUT_MS,
+        "Loading Figma capture script",
+      ),
     ]);
 
     await new Promise((r) => setTimeout(r, 4000));
@@ -295,21 +315,32 @@ async function handleCapture(tab, options = {}) {
 
     while (attempts > 0) {
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: async (cid, ep) => {
-            if (!window.figma || !window.figma.captureForDesign) {
-              throw new Error("Figma capture script did not initialize");
-            }
-            await window.figma.captureForDesign({
-              captureId: cid,
-              endpoint: ep,
-              selector: "body",
-            });
-          },
-          args: [captureId, endpoint],
-          world: "MAIN",
-        });
+        await withTimeout(
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: async (cid, ep, timeoutMs) => {
+              if (!window.figma || !window.figma.captureForDesign) {
+                throw new Error("Figma capture script did not initialize");
+              }
+              const capture = window.figma.captureForDesign({
+                captureId: cid,
+                endpoint: ep,
+                selector: "body",
+              });
+              const timeout = new Promise((_, reject) =>
+                setTimeout(
+                  () => reject(new Error(`captureForDesign timed out after ${Math.round(timeoutMs / 1000)}s`)),
+                  timeoutMs,
+                ),
+              );
+              await Promise.race([capture, timeout]);
+            },
+            args: [captureId, endpoint, CAPTURE_FOR_DESIGN_TIMEOUT_MS],
+            world: "MAIN",
+          }),
+          CAPTURE_FOR_DESIGN_TIMEOUT_MS + 5000,
+          "Figma overlay",
+        );
         lastError = null;
         break; // Success
       } catch (err) {
