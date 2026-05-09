@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "start:headless": "node server.js --headless",
     "capture": "node capture-server.js",
     "setup": "npx playwright install chromium",
     "build:extension": "node scripts/build-extension.mjs"
