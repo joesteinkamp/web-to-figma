@@ -4,6 +4,18 @@ const DS_DAEMON_URL = "http://localhost:19615";
 let captureState = { active: false, step: 0, dsMode: false };
 let totalSteps = 3;
 
+function notify(message, contextMessage) {
+  try {
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: "Web to Figma",
+      message,
+      contextMessage,
+    });
+  } catch {}
+}
+
 function sendProgress(step, error) {
   captureState = { active: !error && step < totalSteps, step, error: error || null, dsMode: captureState.dsMode };
   chrome.runtime.sendMessage({ action: "capture-progress", step, error: error || null, dsMode: captureState.dsMode }).catch(() => {});
@@ -256,6 +268,7 @@ async function handleCapture(tab, options = {}) {
     });
 
     sendProgress(6);
+    notify("Design ready in Figma", "Open the linked file to see the result.");
   } else {
     // Standard mode: native messaging + client-side Figma capture
     const hostMsg = {
@@ -293,19 +306,25 @@ async function handleCapture(tab, options = {}) {
     let attempts = 3;
     let lastError = null;
 
+    // Kick off captureForDesign and treat a successful *call* (no sync throw,
+    // script is initialized) as "overlay ready". The promise it returns is not
+    // awaited — the overlay drives its own UI on the page, and waiting for it
+    // to resolve is unreliable: the popup closes on focus loss the moment the
+    // user looks at the overlay, so we'd never deliver step 3 in time anyway.
     while (attempts > 0) {
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          func: async (cid, ep) => {
+          func: (cid, ep) => {
             if (!window.figma || !window.figma.captureForDesign) {
               throw new Error("Figma capture script did not initialize");
             }
-            await window.figma.captureForDesign({
+            const p = window.figma.captureForDesign({
               captureId: cid,
               endpoint: ep,
               selector: "body",
             });
+            if (p && typeof p.catch === "function") p.catch(() => {});
           },
           args: [captureId, endpoint],
           world: "MAIN",
@@ -327,6 +346,7 @@ async function handleCapture(tab, options = {}) {
     }
 
     sendProgress(3);
+    notify("Capture ready in Figma", "Click “Open file” on the page overlay.");
   }
 
   setTimeout(() => { captureState = { active: false, step: 0, dsMode: false }; totalSteps = 3; }, 5000);
@@ -367,6 +387,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         await handleCapture(tab, { fileUrl: message.fileUrl, useDesignSystem: message.useDesignSystem });
       } catch (err) {
         sendProgress(0, err.message);
+        notify("Capture failed", err.message);
       }
     })();
     return true;
